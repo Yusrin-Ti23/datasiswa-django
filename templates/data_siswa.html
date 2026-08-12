@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Data Siswa</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-light: #eef2ff;
+            --success: #10b981;
+            --danger: #ef4444;
+            --card-radius: 16px;
+        }
+
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: #f1f5f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        .topbar {
+            background: #fff;
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+
+        .topbar .page-title h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .topbar .page-title small {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        .content {
+            padding: 26px 28px;
+        }
+
+        .content-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .content-header h4 {
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .panel {
+            background: #fff;
+            border-radius: var(--card-radius);
+            border: 1px solid #eef2f7;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .03);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .panel-header strong {
+            font-size: .95rem;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        .panel-header .title-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: var(--primary-light);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .panel-body {
+            padding: 20px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: .75rem;
+            font-weight: 600;
+        }
+
+        .status-lulus {
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+        }
+
+        .status-tidak {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .table thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 12px 16px;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            padding: 12px 16px;
+            vertical-align: middle;
+            font-size: .88rem;
+            color: #334155;
+            border-color: #f1f5f9;
+        }
+
+        .table-hover tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .btn-back {
+            border-radius: 30px;
+            padding: 8px 18px;
+            font-size: .85rem;
+            font-weight: 500;
+        }
+
+        .filter-select {
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            padding: 8px 14px;
+            font-size: .85rem;
+            min-width: 180px;
+        }
+
+        @media (max-width: 576px) {
+            .content {
+                padding: 18px;
+            }
+            .topbar {
+                padding: 12px 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ================= TOPBAR ================= -->
+<div class="topbar">
+        <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+    ← Kembali
+</a>
+        <div class="page-title">
+            <h5>Data Siswa</h5>
+            <small id="subtitle">Memuat data...</small>
+        </div>
+    </div>
+
+    <!-- ================= CONTENT ================= -->
+    <div class="content">
+        <div class="content-header">
+            <div>
+                <h4><i class="bi bi-people-fill text-primary me-2"></i>Semua Data Siswa</h4>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb p-0 mb-0">
+                        <li class="breadcrumb-item"><a href="/api/dashboard/" class="text-decoration-none" id="breadcrumbDashboard">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Data Siswa</li>
+                    </ol>
+                </nav>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge rounded-pill text-bg-light border px-3 py-2" id="filterBadge">
+                    <i class="bi bi-funnel me-1"></i> Semua Kelas
+                </span>
+                <span class="badge rounded-pill text-bg-primary px-3 py-2" id="countBadge">
+                    <i class="bi bi-database me-1"></i> 0 siswa
+                </span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="title-icon"><i class="bi bi-table"></i></span>
+                    <strong>Daftar Siswa</strong>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="position-relative">
+                        <i class="bi bi-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.8rem;"></i>
+                        <input type="text" id="searchInput" class="filter-select ps-4" placeholder="Cari nama / NIS...">
+                    </div>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>NIS</th>
+                                <th>Nama Siswa</th>
+                                <th>Kelas</th>
+                                <th>Jenis Kelamin</th>
+                                <th>Nilai Akhir</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="siswaTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                                    Memuat data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= JAVASCRIPT ================= -->
+    <script>
+        const API_URL = "/api/dashboard/api/";
+
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name) || "Semua";
+        }
+
+        function statusBadge(status) {
+            const isLulus = status === "Lulus";
+            return `<span class="status-badge ${isLulus ? "status-lulus" : "status-tidak"}">
+                <i class="bi ${isLulus ? "bi-check-circle-fill" : "bi-x-circle-fill"}"></i>
+                ${status || "-"}
+            </span>`;
+        }
+
+        function loadDataSiswa() {
+            const kelas = getQueryParam("kelas");
+            const status = getQueryParam("status");
+
+            const subtitle = document.getElementById("subtitle");
+            const filterBadge = document.getElementById("filterBadge");
+            const countBadge = document.getElementById("countBadge");
+            const tbody = document.getElementById("siswaTableBody");
+
+            let url = API_URL + "?kelas=" + encodeURIComponent(kelas) + "&status=" + encodeURIComponent(status);
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("API Error: " + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    subtitle.textContent = (status === "Semua" ? "Semua siswa" : "Siswa " + status) + " - " + kelas;
+                    filterBadge.innerHTML = `<i class="bi bi-funnel me-1"></i> ${kelas} • ${status}`;
+                    countBadge.innerHTML = `<i class="bi bi-database me-1"></i> ${data.siswa_detail.length} siswa`;
+
+                    tbody.innerHTML = "";
+
+                    if (data.siswa_detail.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                    Tidak ada data siswa.
+                                </td>
+                            </tr>`;
+                        return;
+                    }
+
+                    data.siswa_detail.forEach((siswa, index) => {
+                        const jk = siswa.Jenis_Kelamin === "L" ? "Laki-laki" : siswa.Jenis_Kelamin === "P" ? "Perempuan" : "-";
+                        const row = document.createElement("tr");
+                        row.innerHTML = `
+                            <td class="text-muted">${index + 1}</td>
+                            <td><strong>${siswa.NIS ?? "-"}</strong></td>
+                            <td>${siswa.Nama_Siswa ?? "-"}</td>
+                            <td>
+                                <span class="badge rounded-pill text-bg-light border px-3 py-2">${siswa.Kelas ?? "-"}</span>
+                            </td>
+                            <td>${jk}</td>
+                            <td><strong>${siswa.Nilai_Akhir ?? "-"}</strong></td>
+                            <td>${statusBadge(siswa.Status_Kelulusan)}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center text-danger py-4">
+                                <i class="bi bi-exclamation-triangle fs-4 d-block mb-2"></i>
+                                Gagal memuat data. ${error.message}
+                            </td>
+                        </tr>`;
+                });
+        }
+
+// Live search
+        document.getElementById("searchInput").addEventListener("input", function () {
+            const q = (this.value || "").toLowerCase().trim();
+            const rows = document.querySelectorAll("#siswaTableBody tr");
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(q) ? "" : "none";
+            });
+        });
+
+        // Sertakan filter kelas saat kembali ke dashboard
+        function updateBackLinks() {
+            const kelas = getQueryParam("kelas");
+            const url = kelas !== "Semua" ? "/api/dashboard/?kelas=" + encodeURIComponent(kelas) : "/api/dashboard/";
+            const backBtn = document.getElementById("backBtn");
+            const crumb = document.getElementById("breadcrumbDashboard");
+            if (backBtn) backBtn.href = url;
+            if (crumb) crumb.href = url;
+        }
+
+        updateBackLinks();
+        loadDataSiswa();
+    </script>
+
+</body>
+</html>

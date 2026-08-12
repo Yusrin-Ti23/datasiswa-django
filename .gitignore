@@ -1,0 +1,25 @@
+# File Excel lokal
+*.xlsx
+
+# Jupyter Notebook
+*.ipynb
+
+# Backup database/data lokal
+backup_siswa.json
+
+
+# Virtual Environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment / secret
+.env
+
+# Django static hasil collectstatic
+staticfiles/
+
+# Database lokal
+db.sqlite3

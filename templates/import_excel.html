@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Import Data Siswa</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --sidebar-bg: #1e293b;
+            --sidebar-hover: #334155;
+            --primary: #4361ee;
+            --primary-light: #eef2ff;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --card-radius: 16px;
+        }
+
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: #f1f5f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ============ SIDEBAR ============ */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            color: #cbd5e1;
+            z-index: 1040;
+            transition: transform .3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 22px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+        }
+
+        .sidebar .brand-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .sidebar .brand-text {
+            color: #fff;
+            font-weight: 600;
+            font-size: .95rem;
+            line-height: 1.2;
+        }
+
+        .sidebar .brand-text small {
+            display: block;
+            color: #94a3b8;
+            font-weight: 400;
+            font-size: .7rem;
+        }
+
+        .sidebar .menu-label {
+            padding: 18px 20px 6px;
+            font-size: .68rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .sidebar .nav-link {
+            color: #cbd5e1;
+            padding: 11px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: .9rem;
+            border-left: 3px solid transparent;
+            transition: all .2s;
+        }
+
+        .sidebar .nav-link i {
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+        }
+
+        .sidebar .nav-link:hover {
+            background: var(--sidebar-hover);
+            color: #fff;
+        }
+
+        .sidebar .nav-link.active {
+            background: rgba(99, 102, 241, .15);
+            color: #fff;
+            border-left: 3px solid #6366f1;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, .08);
+            font-size: .75rem;
+            color: #94a3b8;
+        }
+
+        /* ============ MAIN AREA ============ */
+        .main {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            transition: margin-left .3s ease;
+        }
+
+        .topbar {
+            background: #fff;
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+
+        .topbar .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            color: #334155;
+            cursor: pointer;
+        }
+
+        .topbar .page-title h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .topbar .page-title small {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        .topbar .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: .85rem;
+            margin-left: auto;
+        }
+
+        .content {
+            padding: 26px 28px;
+        }
+
+        .content-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .content-header h4 {
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .content-header .breadcrumb {
+            margin: 0;
+            font-size: .82rem;
+        }
+
+        /* ============ IMPORT CARD ============ */
+        .import-card {
+            background: #fff;
+            border-radius: var(--card-radius);
+            border: 1px solid #eef2f7;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .03);
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .import-card-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .import-card-header .title-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: var(--primary-light);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .import-card-header strong {
+            font-size: 1rem;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        .import-card-header small {
+            color: #94a3b8;
+            font-size: .78rem;
+        }
+
+        .import-card-body {
+            padding: 24px;
+        }
+
+        /* Upload dropzone */
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 14px;
+            padding: 40px 24px;
+            text-align: center;
+            background: #f8fafc;
+            transition: all .25s;
+            cursor: pointer;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .dropzone .dz-icon {
+            font-size: 2.6rem;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .dropzone h6 {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .dropzone p {
+            color: #64748b;
+            font-size: .82rem;
+            margin: 0;
+        }
+
+        .dropzone .file-name {
+            display: none;
+            margin-top: 12px;
+            padding: 8px 14px;
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+            border-radius: 30px;
+            font-size: .8rem;
+            font-weight: 500;
+        }
+
+        .btn-import {
+            border-radius: 12px;
+            padding: 12px 28px;
+            font-weight: 600;
+            font-size: .9rem;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none;
+            color: #fff;
+            transition: all .2s;
+        }
+
+        .btn-import:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, .35);
+            color: #fff;
+        }
+
+        .btn-import:disabled {
+            opacity: .6;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Info panel */
+        .info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-item .info-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .info-item .info-icon.bg-blue { background: #eef2ff; color: #4361ee; }
+        .info-item .info-icon.bg-green { background: #ecfdf5; color: #10b981; }
+        .info-item .info-icon.bg-orange { background: #fff7ed; color: #f59e0b; }
+        .info-item .info-icon.bg-purple { background: #f5f3ff; color: #8b5cf6; }
+
+        .info-item strong {
+            font-size: .85rem;
+            color: #1e293b;
+            font-weight: 600;
+            display: block;
+        }
+
+        .info-item small {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        /* Messages */
+        .alert-custom {
+            border-radius: 12px;
+            font-size: .88rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* ============ RESPONSIVE ============ */
+        @media (max-width: 991px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+                box-shadow: 0 0 40px rgba(0,0,0,.3);
+            }
+            .main {
+                margin-left: 0;
+            }
+            .topbar .menu-toggle {
+                display: block;
+            }
+            .content {
+                padding: 18px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .topbar .page-title small {
+                display: none;
+            }
+            .content-header h4 {
+                font-size: 1.2rem;
+            }
+            .dropzone {
+                padding: 28px 16px;
+            }
+        }
+
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.4);
+            z-index: 1039;
+        }
+        .sidebar-backdrop.show {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<!-- ================= SIDEBAR ================= -->
+<aside class="sidebar" id="sidebar">
+    <div class="brand">
+        <div class="brand-icon"><i class="bi bi-mortarboard-fill"></i></div>
+        <div class="brand-text">
+            Sistem Informasi
+            <small>Data Siswa</small>
+        </div>
+    </div>
+
+    <div class="menu-label">Menu Utama</div>
+    <nav class="nav flex-column flex-grow-1">
+        <a class="nav-link" href="/dashboard/">
+            <i class="bi bi-speedometer2"></i>
+            Dashboard
+        </a>
+<a class="nav-link active" href="/api/import_excel/">
+            <i class="bi bi-file-earmark-arrow-up"></i>
+            Import Excel
+        </a>
+        <a class="nav-link" href="/api/penyimpanan_file/">
+            <i class="bi bi-folder2-open"></i>
+            My Folder
+        </a>
+        <a class="nav-link" href="/api/schema/docs/">
+            <i class="bi bi-filetype-json"></i>
+            Dokumen API
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <i class="bi bi-shield-check me-1"></i> v1.0 &bull; © 2024
+    </div>
+</aside>
+
+<!-- ================= MAIN ================= -->
+<div class="main">
+
+    <!-- ================= NAVBAR / TOPBAR ================= -->
+    <div class="topbar">
+        <button class="menu-toggle" id="menuToggle" aria-label="Menu">
+            <i class="bi bi-list"></i>
+        </button>
+
+        <div class="page-title">
+            <h5>Import Data Siswa</h5>
+            <small>Upload file Excel untuk memuat data siswa</small>
+        </div>
+
+        <div class="avatar"><i class="bi bi-person-fill"></i></div>
+    </div>
+
+    <!-- ================= CONTENT ================= -->
+    <div class="content">
+
+        <!-- Header + Breadcrumb -->
+        <div class="content-header">
+            <div>
+                <h4>Import <span class="text-primary">Data Siswa</span></h4>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb p-0 mb-0">
+                        <li class="breadcrumb-item"><a href="/api/dashboard/" class="text-decoration-none">Home</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Import Excel</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                {% if message.tags == "error" %}
+                    <div class="alert alert-danger alert-custom" role="alert">
+                        <i class="bi bi-x-circle-fill"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                {% elif message.tags == "success" %}
+                    <div class="alert alert-success alert-custom" role="alert">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info alert-custom" role="alert">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+        <div class="row g-3">
+            <!-- ================= IMPORT CARD ================= -->
+            <div class="col-lg-7">
+                <div class="import-card">
+                    <div class="import-card-header">
+                        <span class="title-icon"><i class="bi bi-cloud-arrow-up-fill"></i></span>
+                        <div>
+                            <strong>Upload File Excel</strong>
+                            <small>Format .xlsx / .xls</small>
+                        </div>
+                    </div>
+                    <div class="import-card-body">
+                        <form method="POST" enctype="multipart/form-data" id="importForm">
+                            {% csrf_token %}
+
+                            <label for="{{ form.file.id_for_label }}" class="dropzone" id="dropzone">
+                                <div class="dz-icon"><i class="bi bi-file-earmark-spreadsheet-fill"></i></div>
+                                <h6>Choose file di sini</h6>
+                                <p>atau klik untuk memilih file Excel</p>
+                                <div class="file-name" id="fileName">
+                                    <i class="bi bi-file-earmark-check-fill me-1"></i>
+                                    <span id="fileNameText"></span>
+                                </div>
+                            </label>
+
+                            <input type="file" name="{{ form.file.html_name }}" id="{{ form.file.id_for_label }}"
+                                   class="d-none" accept=".xlsx,.xls">
+
+                            {% if form.file.errors %}
+                                <div class="text-danger small mt-2">
+                                    {% for error in form.file.errors %}
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+
+                            <div class="d-flex justify-content-center mt-4">
+                                <button type="submit" class="btn btn-import" id="btnImport">
+                                    <i class="bi bi-upload me-1"></i> Import Data
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= INFO CARD ================= -->
+            <div class="col-lg-5">
+                <div class="import-card">
+                    <div class="import-card-header">
+                        <span class="title-icon" style="background:#f5f3ff;color:#8b5cf6;"><i class="bi bi-lightbulb-fill"></i></span>
+                        <div>
+                            <strong>Panduan Import</strong>
+                            <small>Persyaratan file Excel</small>
+                        </div>
+                    </div>
+                    <div class="import-card-body py-2">
+                        <div class="info-item">
+                            <div class="info-icon bg-blue"><i class="bi bi-filetype-xlsx"></i></div>
+                            <div>
+                                <strong>Format File</strong>
+                                <small>Gunakan file Excel dengan ekstensi .xlsx atau .xls</small>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon bg-green"><i class="bi bi-list-check"></i></div>
+                            <div>
+                                <strong>Kolom Wajib</strong>
+                                <small>NIS, Nama Siswa, Jenis Kelamin, dan Kelas</small>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon bg-orange"><i class="bi bi-123"></i></div>
+                            <div>
+                                <strong>Kolom Akademik</strong>
+                                <small>Hadir, Izin, Sakit, Alfa, Tugas, UTS, UAS, Nilai Akhir, Status Kelulusan</small>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon bg-purple"><i class="bi bi-shield-check"></i></div>
+                            <div>
+                                <strong>Data Unik</strong>
+                                <small>Siswa dengan NIS yang sudah ada akan dilewati (tidak diimport ganda)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ================= JAVASCRIPT ================= -->
+<script>
+    // Sidebar toggle (mobile)
+    const menuToggle = document.getElementById("menuToggle");
+    const sidebar = document.getElementById("sidebar");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("{{ form.file.id_for_label }}");
+    const fileNameText = document.getElementById("fileNameText");
+    const fileNameBlock = document.getElementById("fileName");
+    const btnImport = document.getElementById("btnImport");
+
+    function closeSidebar() {
+        sidebar.classList.remove("open");
+        backdrop.classList.remove("show");
+    }
+
+    menuToggle.addEventListener("click", () => {
+        sidebar.classList.toggle("open");
+        backdrop.classList.toggle("show");
+    });
+
+    backdrop.addEventListener("click", closeSidebar);
+
+    // Dropzone click -> open file picker
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    // Drag & drop
+    ["dragenter", "dragover"].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.add("dragover");
+        });
+    });
+    ["dragleave", "drop"].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove("dragover");
+        });
+    });
+    dropzone.addEventListener("drop", (e) => {
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            updateFileDisplay();
+        }
+    });
+
+    // Show selected file name
+    function updateFileDisplay() {
+        if (fileInput.files && fileInput.files.length > 0) {
+            fileNameText.textContent = fileInput.files[0].name;
+            fileNameBlock.style.display = "inline-flex";
+        }
+    }
+
+    fileInput.addEventListener("change", updateFileDisplay);
+
+    // Disable button while submitting
+    document.getElementById("importForm").addEventListener("submit", () => {
+        btnImport.disabled = true;
+        btnImport.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Mengimport...';
+    });
+</script>
+
+</body>
+</html>
