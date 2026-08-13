@@ -17,13 +17,13 @@ from .models import ImportedFile, Kelas, Siswa
 from .serializers import KelasSerializer, SiswaSerializer
 
 
-# ============================================================
+# ==========================================================
 # HELPER
-# ============================================================
+# ==========================================================
 
 def format_nama_kelas(kelas):
     """
-    Membuat nama kelas yang ditampilkan.
+    Menghasilkan nama kelas yang konsisten.
 
     Contoh:
     tingkat = XII
@@ -37,11 +37,11 @@ def format_nama_kelas(kelas):
     if not kelas:
         return "-"
 
-    nama = (kelas.nama or "").strip()
     tingkat = (kelas.tingkat or "").strip()
     jurusan = (kelas.jurusan or "").strip()
+    nama = (kelas.nama or "").strip()
 
-    # Jika nama sudah mengandung tingkat
+    # Jika nama sudah lengkap
     if nama.upper().startswith(("X ", "XI ", "XII ")):
         return nama
 
@@ -62,11 +62,14 @@ def format_nama_kelas(kelas):
 def _parse_kelas(kelas_name):
     """
     Mengubah nama kelas menjadi:
-    (nama, tingkat, jurusan)
+
+    nama
+    tingkat
+    jurusan
 
     Contoh:
     XII IPA A
-    ->
+    ↓
     nama = A
     tingkat = XII
     jurusan = IPA
@@ -75,18 +78,22 @@ def _parse_kelas(kelas_name):
     if not kelas_name:
         return None, None, None
 
-    parts = str(kelas_name).split()
+    parts = str(kelas_name).strip().split()
 
     if len(parts) >= 3:
         tingkat = parts[0]
         jurusan = parts[1]
         nama = " ".join(parts[2:])
-    else:
-        tingkat = None
-        jurusan = None
-        nama = str(kelas_name)
 
-    return nama, tingkat, jurusan
+        return nama, tingkat, jurusan
+
+    if len(parts) == 2:
+        tingkat = parts[0]
+        nama = parts[1]
+
+        return nama, tingkat, None
+
+    return parts[0], None, None
 
 
 def _normalize_header(value):
@@ -106,7 +113,7 @@ def _normalize_header(value):
 
 def _pick_column(df_columns, candidates):
     """
-    Mencari nama kolom Excel berdasarkan beberapa kemungkinan nama.
+    Mencari nama kolom Excel berdasarkan beberapa alias.
     """
 
     normalized_columns = {
@@ -115,6 +122,7 @@ def _pick_column(df_columns, candidates):
     }
 
     for candidate in candidates:
+
         candidate_normalized = _normalize_header(candidate)
 
         if candidate_normalized in normalized_columns:
@@ -125,7 +133,7 @@ def _pick_column(df_columns, candidates):
 
 def _clean_cell(value):
     """
-    Membersihkan data cell Excel.
+    Membersihkan data dari Excel.
     """
 
     if value is None:
@@ -135,6 +143,7 @@ def _clean_cell(value):
         return None
 
     if isinstance(value, str):
+
         value = " ".join(value.split()).strip()
 
         return value if value else None
@@ -144,8 +153,7 @@ def _clean_cell(value):
 
 def _normalize_jenis_kelamin(value):
     """
-    Normalisasi jenis kelamin menjadi:
-    L atau P
+    Normalisasi jenis kelamin menjadi L atau P.
     """
 
     value = _clean_cell(value)
@@ -166,7 +174,6 @@ def _normalize_jenis_kelamin(value):
         "male",
         "cowok",
         "1",
-        "m",
     }
 
     perempuan = {
@@ -178,8 +185,6 @@ def _normalize_jenis_kelamin(value):
         "female",
         "cewek",
         "2",
-        "w",
-        "f",
     }
 
     if value in laki_laki:
@@ -193,26 +198,24 @@ def _normalize_jenis_kelamin(value):
 
 def _int_val(row, column):
     """
-    Mengambil nilai integer dari DataFrame.
+    Mengubah nilai menjadi integer.
     """
 
-    if not column:
-        return 0
-
-    value = _clean_cell(row.get(column))
+    value = _clean_cell(row.get(column)) if column else None
 
     if value is None:
         return 0
 
     try:
         return int(value)
+
     except (TypeError, ValueError):
         return 0
 
 
-# ============================================================
+# ==========================================================
 # IMPORT EXCEL
-# ============================================================
+# ==========================================================
 
 @login_required(login_url="login")
 def import_excel(request):
@@ -232,6 +235,7 @@ def import_excel(request):
             if not excel_file.name.lower().endswith(
                 (".xlsx", ".xls")
             ):
+
                 messages.error(
                     request,
                     "File harus berupa Excel (.xlsx atau .xls)."
@@ -242,16 +246,15 @@ def import_excel(request):
             # Baca Excel
             df = pd.read_excel(excel_file)
 
-            # Bersihkan nama kolom
             df.columns = (
                 df.columns
                 .astype(str)
                 .str.strip()
             )
 
-            # ====================================================
-            # DETEKSI KOLOM
-            # ====================================================
+            # --------------------------------------------------
+            # CARI KOLOM
+            # --------------------------------------------------
 
             col_no = _pick_column(
                 df.columns,
@@ -269,7 +272,7 @@ def import_excel(request):
                     "nama",
                     "nama siswa",
                     "nama_siswa",
-                    "nama_lengkap",
+                    "nama_lengkap"
                 ]
             )
 
@@ -279,7 +282,7 @@ def import_excel(request):
                     "jenis kelamin",
                     "jenis_kelamin",
                     "jk",
-                    "gender",
+                    "gender"
                 ]
             )
 
@@ -287,7 +290,7 @@ def import_excel(request):
                 df.columns,
                 [
                     "kelas",
-                    "kelas siswa",
+                    "kelas siswa"
                 ]
             )
 
@@ -295,7 +298,7 @@ def import_excel(request):
                 df.columns,
                 [
                     "alamat",
-                    "address",
+                    "address"
                 ]
             )
 
@@ -328,7 +331,7 @@ def import_excel(request):
                 df.columns,
                 [
                     "terlambat tugas",
-                    "terlambat_tugas",
+                    "terlambat_tugas"
                 ]
             )
 
@@ -346,7 +349,7 @@ def import_excel(request):
                 df.columns,
                 [
                     "nilai akhir",
-                    "nilai_akhir",
+                    "nilai_akhir"
                 ]
             )
 
@@ -354,13 +357,13 @@ def import_excel(request):
                 df.columns,
                 [
                     "status kelulusan",
-                    "status_kelulusan",
+                    "status_kelulusan"
                 ]
             )
 
-            # ====================================================
+            # --------------------------------------------------
             # VALIDASI KOLOM WAJIB
-            # ====================================================
+            # --------------------------------------------------
 
             required_columns = []
 
@@ -388,18 +391,15 @@ def import_excel(request):
 
             berhasil = 0
 
-            # ====================================================
-            # SIMPAN KE DATABASE
-            # ====================================================
+            # --------------------------------------------------
+            # TRANSACTION
+            # --------------------------------------------------
 
             with transaction.atomic():
 
                 for _, row in df.iterrows():
 
-                    # -------------------------------
                     # NIS
-                    # -------------------------------
-
                     nis = _clean_cell(
                         row.get(col_nis)
                     )
@@ -408,31 +408,18 @@ def import_excel(request):
                         continue
 
                     if isinstance(nis, float):
-                        nis = int(nis)
-
-                    nis = str(nis)
+                        nis = str(int(nis))
+                    else:
+                        nis = str(nis)
 
                     # Hindari duplikasi
                     if Siswa.objects.filter(
                         nis=nis
                     ).exists():
+
                         continue
 
-                    # -------------------------------
-                    # JENIS KELAMIN
-                    # -------------------------------
-
-                    jenis_kelamin = _normalize_jenis_kelamin(
-                        row.get(col_jk)
-                    )
-
-                    if not jenis_kelamin:
-                        continue
-
-                    # -------------------------------
-                    # NAMA
-                    # -------------------------------
-
+                    # Nama
                     nama = _clean_cell(
                         row.get(col_nama)
                     )
@@ -440,29 +427,25 @@ def import_excel(request):
                     if not nama:
                         continue
 
-                    # -------------------------------
-                    # ALAMAT
-                    # -------------------------------
+                    # Jenis kelamin
+                    jenis_kelamin = _normalize_jenis_kelamin(
+                        row.get(col_jk)
+                    )
 
+                    if not jenis_kelamin:
+                        continue
+
+                    # Alamat
                     alamat = (
-                        _clean_cell(
-                            row.get(col_alamat)
-                        )
+                        _clean_cell(row.get(col_alamat))
                         if col_alamat
                         else None
                     )
 
-                    # -------------------------------
-                    # NOMOR
-                    # -------------------------------
-
-                    no = (
-                        _clean_cell(
-                            row.get(col_no)
-                        )
-                        if col_no
-                        else None
-                    )
+                    # Nomor
+                    no = _clean_cell(
+                        row.get(col_no)
+                    ) if col_no else None
 
                     if no is not None:
 
@@ -472,47 +455,41 @@ def import_excel(request):
                         except (TypeError, ValueError):
                             no = None
 
-                    # -------------------------------
+                    # --------------------------------------------------
                     # KELAS
-                    # -------------------------------
+                    # --------------------------------------------------
 
                     kelas_name = _clean_cell(
                         row.get(col_kelas)
                     )
 
-                    kelas_obj = None
-
-                    if kelas_name:
-
-                        nama_kelas, tingkat, jurusan = (
-                            _parse_kelas(kelas_name)
-                        )
-
-                        kelas_obj = Kelas.objects.filter(
-                            nama=nama_kelas,
-                            tingkat=tingkat,
-                            jurusan=jurusan,
-                        ).first()
-
-                        if not kelas_obj:
-
-                            kelas_obj = Kelas.objects.create(
-                                nama=nama_kelas,
-                                tingkat=tingkat,
-                                jurusan=jurusan,
-                            )
-
-                    if not kelas_obj:
+                    if not kelas_name:
                         continue
 
-                    # -------------------------------
+                    nama_kelas, tingkat, jurusan = _parse_kelas(
+                        kelas_name
+                    )
+
+                    kelas_obj = Kelas.objects.filter(
+                        nama=nama_kelas,
+                        tingkat=tingkat,
+                        jurusan=jurusan
+                    ).first()
+
+                    if not kelas_obj:
+
+                        kelas_obj = Kelas.objects.create(
+                            nama=nama_kelas,
+                            tingkat=tingkat,
+                            jurusan=jurusan
+                        )
+
+                    # --------------------------------------------------
                     # NILAI AKHIR
-                    # -------------------------------
+                    # --------------------------------------------------
 
                     nilai_akhir = (
-                        _clean_cell(
-                            row.get(col_nilai)
-                        )
+                        _clean_cell(row.get(col_nilai))
                         if col_nilai
                         else None
                     )
@@ -527,21 +504,16 @@ def import_excel(request):
                         except (TypeError, ValueError):
                             nilai_akhir = None
 
-                    # -------------------------------
-                    # STATUS KELULUSAN
-                    # -------------------------------
-
+                    # Status
                     status = (
-                        _clean_cell(
-                            row.get(col_status)
-                        )
+                        _clean_cell(row.get(col_status))
                         if col_status
                         else None
                     )
 
-                    # =================================================
-                    # CREATE SISWA
-                    # =================================================
+                    # --------------------------------------------------
+                    # SIMPAN SISWA
+                    # --------------------------------------------------
 
                     Siswa.objects.create(
 
@@ -604,9 +576,9 @@ def import_excel(request):
 
                     berhasil += 1
 
-            # ====================================================
-            # SIMPAN FILE EXCEL
-            # ====================================================
+            # --------------------------------------------------
+            # SIMPAN FILE
+            # --------------------------------------------------
 
             excel_file.seek(0)
 
@@ -638,12 +610,13 @@ def import_excel(request):
     )
 
 
-# ============================================================
+# ==========================================================
 # HALAMAN
-# ============================================================
+# ==========================================================
 
 @login_required(login_url="login")
 def dashboard(request):
+
     return render(
         request,
         "dashboard.html"
@@ -652,6 +625,7 @@ def dashboard(request):
 
 @login_required(login_url="login")
 def data_siswa(request):
+
     return render(
         request,
         "data_siswa.html"
@@ -660,6 +634,7 @@ def data_siswa(request):
 
 @login_required(login_url="login")
 def status_kelulusan(request):
+
     return render(
         request,
         "Status_kelulusan.html"
@@ -669,10 +644,8 @@ def status_kelulusan(request):
 @login_required(login_url="login")
 def penyimpanan_file(request):
 
-    files = (
-        ImportedFile.objects
-        .all()
-        .order_by("-tanggal_upload")
+    files = ImportedFile.objects.all().order_by(
+        "-tanggal_upload"
     )
 
     return render(
@@ -711,10 +684,10 @@ def hapus_file(request, pk):
     )
 
 
-# ============================================================
+# ==========================================================
 # API DASHBOARD
-# DATABASE → PANDAS → API
-# ============================================================
+# DATABASE → API
+# ==========================================================
 
 @api_view(["GET"])
 def dashboard_data_api(request):
@@ -723,40 +696,60 @@ def dashboard_data_api(request):
         "kelas"
     )
 
-    # ========================================================
-    # AMBIL DATA SISWA
-    # ========================================================
+    # ------------------------------------------------------
+    # AMBIL DATA DATABASE
+    # ------------------------------------------------------
 
-    siswa = (
-        Siswa.objects
-        .select_related("kelas")
-        .all()
-    )
+    siswa = Siswa.objects.select_related(
+        "kelas"
+    ).all()
 
     data = list(
         siswa.values(
+
             "id",
+
             "nama",
+
             "nis",
+
             "jenis_kelamin",
+
             "hadir",
+
             "izin",
+
             "sakit",
+
             "alfa",
+
             "tugas",
+
             "terlambat_tugas",
+
             "uts",
+
             "uas",
+
             "nilai_akhir",
+
             "status_kelulusan",
+
             "kelas_id",
+
             "kelas__nama",
+
             "kelas__tingkat",
+
             "kelas__jurusan",
         )
     )
 
     df = pd.DataFrame(data)
+
+    # ------------------------------------------------------
+    # JIKA DATA KOSONG
+    # ------------------------------------------------------
 
     if df.empty:
 
@@ -767,19 +760,23 @@ def dashboard_data_api(request):
             status=404
         )
 
-    # ========================================================
-    # MEMBUAT NAMA KELAS
-    # ========================================================
+    # ------------------------------------------------------
+    # FORMAT NAMA KELAS
+    # ------------------------------------------------------
 
     df["nama_kelas"] = (
         df["kelas__tingkat"]
         .fillna("")
         .astype(str)
+
         + " "
+
         + df["kelas__jurusan"]
         .fillna("")
         .astype(str)
+
         + " "
+
         + df["kelas__nama"]
         .fillna("")
         .astype(str)
@@ -795,9 +792,9 @@ def dashboard_data_api(request):
         .str.strip()
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # DAFTAR KELAS
-    # ========================================================
+    # ------------------------------------------------------
 
     daftar_kelas = sorted(
         df["nama_kelas"]
@@ -806,9 +803,9 @@ def dashboard_data_api(request):
         .tolist()
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # FILTER KELAS
-    # ========================================================
+    # ------------------------------------------------------
 
     if nama_kelas and nama_kelas != "Semua":
 
@@ -824,6 +821,7 @@ def dashboard_data_api(request):
                         f"Kelas '{nama_kelas}' "
                         "tidak ditemukan."
                     ),
+
                     "daftar_kelas": daftar_kelas,
                 },
                 status=404
@@ -833,9 +831,9 @@ def dashboard_data_api(request):
 
         nama_kelas = "Semua Kelas"
 
-    # ========================================================
-    # STATISTIK
-    # ========================================================
+    # ------------------------------------------------------
+    # STATISTIK UTAMA
+    # ------------------------------------------------------
 
     total = len(df)
 
@@ -852,26 +850,31 @@ def dashboard_data_api(request):
     )
 
     rata_rata = (
-        df["nilai_akhir"].mean()
-        if total > 0
+        df["nilai_akhir"]
+        .mean()
+        if total
         else 0
     )
 
+    # ------------------------------------------------------
+    # PERSENTASE
+    # ------------------------------------------------------
+
     persentase_lulus = (
         lulus / total * 100
-        if total > 0
+        if total
         else 0
     )
 
     persentase_tidak_lulus = (
         tidak_lulus / total * 100
-        if total > 0
+        if total
         else 0
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # TOP 10 SISWA
-    # ========================================================
+    # ------------------------------------------------------
 
     top10 = (
         df.sort_values(
@@ -891,30 +894,31 @@ def dashboard_data_api(request):
         .to_dict("records")
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # GRAFIK NILAI
-    # ========================================================
+    # ------------------------------------------------------
 
     grafik_nilai = (
-        df[
+        df.sort_values(
+            by="nilai_akhir",
+            ascending=False
+        )
+        [
             [
                 "nama",
                 "nilai_akhir",
             ]
         ]
-        .sort_values(
-            by="nilai_akhir",
-            ascending=False
-        )
         .head(10)
         .to_dict("records")
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # KEHADIRAN
-    # ========================================================
+    # ------------------------------------------------------
 
     kehadiran = {
+
         "hadir": int(
             df["hadir"].sum()
         ),
@@ -932,59 +936,58 @@ def dashboard_data_api(request):
         ),
     }
 
-    # ========================================================
+    # ------------------------------------------------------
     # KETERLAMBATAN
-    # ========================================================
+    # ------------------------------------------------------
 
     keterlambatan = int(
         df["terlambat_tugas"].sum()
     )
 
-    # ========================================================
+    # ------------------------------------------------------
     # RESPONSE
-    # ========================================================
+    # ------------------------------------------------------
 
-    return Response(
-        {
-            "kelas_dipilih": nama_kelas,
+    return Response({
 
-            "total": total,
+        "kelas_dipilih": nama_kelas,
 
-            "lulus": lulus,
+        "total": total,
 
-            "tidak_lulus": tidak_lulus,
+        "lulus": lulus,
 
-            "persentase_lulus": round(
-                persentase_lulus,
-                2
-            ),
+        "tidak_lulus": tidak_lulus,
 
-            "persentase_tidak_lulus": round(
-                persentase_tidak_lulus,
-                2
-            ),
+        "persentase_lulus": round(
+            persentase_lulus,
+            2
+        ),
 
-            "rata_rata": round(
-                rata_rata,
-                2
-            ),
+        "persentase_tidak_lulus": round(
+            persentase_tidak_lulus,
+            2
+        ),
 
-            "daftar_kelas": daftar_kelas,
+        "rata_rata": round(
+            rata_rata,
+            2
+        ),
 
-            "top10": top10,
+        "daftar_kelas": daftar_kelas,
 
-            "grafik_nilai": grafik_nilai,
+        "top10": top10,
 
-            "kehadiran": kehadiran,
+        "grafik_nilai": grafik_nilai,
 
-            "keterlambatan": keterlambatan,
-        }
-    )
+        "kehadiran": kehadiran,
+
+        "keterlambatan": keterlambatan,
+    })
 
 
-# ============================================================
+# ==========================================================
 # API ANALISIS KELAS
-# ============================================================
+# ==========================================================
 
 @api_view(["GET"])
 def analisis_kelas_api(request):
@@ -1002,11 +1005,9 @@ def analisis_kelas_api(request):
             status=400
         )
 
-    siswa = (
-        Siswa.objects
-        .select_related("kelas")
-        .all()
-    )
+    siswa = Siswa.objects.select_related(
+        "kelas"
+    ).all()
 
     data = list(
         siswa.values(
@@ -1042,16 +1043,23 @@ def analisis_kelas_api(request):
             status=404
         )
 
-    # ========================================================
-    # NAMA KELAS
-    # ========================================================
-
+    # Nama kelas
     df["nama_kelas"] = (
-        df["kelas__tingkat"].fillna("").astype(str)
+        df["kelas__tingkat"]
+        .fillna("")
+        .astype(str)
+
         + " "
-        + df["kelas__jurusan"].fillna("").astype(str)
+
+        + df["kelas__jurusan"]
+        .fillna("")
+        .astype(str)
+
         + " "
-        + df["kelas__nama"].fillna("").astype(str)
+
+        + df["kelas__nama"]
+        .fillna("")
+        .astype(str)
     )
 
     df["nama_kelas"] = (
@@ -1064,10 +1072,7 @@ def analisis_kelas_api(request):
         .str.strip()
     )
 
-    # ========================================================
-    # FILTER
-    # ========================================================
-
+    # Filter
     df_kelas = df[
         df["nama_kelas"] == nama_kelas
     ].copy()
@@ -1084,37 +1089,24 @@ def analisis_kelas_api(request):
             status=404
         )
 
-    # ========================================================
-    # STATISTIK
-    # ========================================================
-
     total = len(df_kelas)
 
     lulus = int(
-        df_kelas[
-            "status_kelulusan"
-        ]
+        df_kelas["status_kelulusan"]
         .eq("Lulus")
         .sum()
     )
 
     tidak_lulus = int(
-        df_kelas[
-            "status_kelulusan"
-        ]
+        df_kelas["status_kelulusan"]
         .eq("Tidak Lulus")
         .sum()
     )
 
     rata_rata = (
-        df_kelas[
-            "nilai_akhir"
-        ].mean()
+        df_kelas["nilai_akhir"]
+        .mean()
     )
-
-    # ========================================================
-    # TOP 10
-    # ========================================================
 
     top10 = (
         df_kelas
@@ -1128,73 +1120,69 @@ def analisis_kelas_api(request):
                 "nama",
                 "nis",
                 "nilai_akhir",
-                "status_kelulusan",
+                "status_kelulusan"
             ]
         ]
         .to_dict("records")
     )
 
-    # ========================================================
-    # RESPONSE
-    # ========================================================
+    return Response({
 
-    return Response(
-        {
-            "kelas": nama_kelas,
+        "kelas": nama_kelas,
 
-            "total_siswa": total,
+        "total_siswa": total,
 
-            "lulus": lulus,
+        "lulus": lulus,
 
-            "tidak_lulus": tidak_lulus,
+        "tidak_lulus": tidak_lulus,
 
-            "persentase_lulus": round(
-                lulus / total * 100,
-                2
+        "persentase_lulus": round(
+            lulus / total * 100,
+            2
+        ),
+
+        "persentase_tidak_lulus": round(
+            tidak_lulus / total * 100,
+            2
+        ),
+
+        "rata_rata_nilai": round(
+            rata_rata,
+            2
+        ),
+
+        "kehadiran": {
+
+            "hadir": int(
+                df_kelas["hadir"].sum()
             ),
 
-            "persentase_tidak_lulus": round(
-                tidak_lulus / total * 100,
-                2
+            "izin": int(
+                df_kelas["izin"].sum()
             ),
 
-            "rata_rata_nilai": round(
-                rata_rata,
-                2
+            "sakit": int(
+                df_kelas["sakit"].sum()
             ),
 
-            "kehadiran": {
-                "hadir": int(
-                    df_kelas["hadir"].sum()
-                ),
-
-                "izin": int(
-                    df_kelas["izin"].sum()
-                ),
-
-                "sakit": int(
-                    df_kelas["sakit"].sum()
-                ),
-
-                "alfa": int(
-                    df_kelas["alfa"].sum()
-                ),
-            },
-
-            "keterlambatan_tugas": int(
-                df_kelas[
-                    "terlambat_tugas"
-                ].sum()
+            "alfa": int(
+                df_kelas["alfa"].sum()
             ),
+        },
 
-            "top10": top10,
-        }
-    )
+        "keterlambatan_tugas": int(
+            df_kelas[
+                "terlambat_tugas"
+            ].sum()
+        ),
+
+        "top10": top10,
+    })
 
 
-# ============================================================
-# SISWA VIEWSET
-# ============================================================
+# ==========================================================
+# SISWA API
+# ==========================================================
 
 class SiswaViewSet(viewsets.ModelViewSet):
 
@@ -1223,16 +1211,14 @@ class SiswaViewSet(viewsets.ModelViewSet):
     ]
 
 
-# ============================================================
-# KELAS VIEWSET
-# ============================================================
+# ==========================================================
+# KELAS API
+# ==========================================================
 
 class KelasViewSet(viewsets.ModelViewSet):
 
-    queryset = (
-        Kelas.objects
-        .all()
-        .order_by("id")
+    queryset = Kelas.objects.all().order_by(
+        "id"
     )
 
     serializer_class = KelasSerializer
