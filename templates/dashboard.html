@@ -930,18 +930,38 @@
 <script>
 /* =========================================================
    DASHBOARD DATA SISWA
-   API:
-   GET /api/dashboard-data/
-   GET /api/analisis-kelas/?kelas=...
+   API: /api/dashboard-data/
    ========================================================= */
 
-const API_DASHBOARD = "/api/dashboard-data/";
-const API_ANALISIS = "/api/analisis-kelas/";
+const API_URL = "/api/dashboard-data/";
 
-let kelulusanChart = null;
-let kehadiranChart = null;
-let keterlambatanChart = null;
-let nilaiChart = null;
+/* =========================================================
+   CHART INSTANCES
+   ========================================================= */
+
+let chartNilai = null;
+let chartKelulusan = null;
+let chartKehadiran = null;
+let chartKeterlambatan = null;
+
+
+/* =========================================================
+   DOM ELEMENT
+   ========================================================= */
+
+const filterKelas = document.getElementById("filterKelas");
+const activeFilter = document.getElementById("activeFilter");
+
+const totalEl = document.getElementById("total");
+const lulusEl = document.getElementById("lulus");
+const tidakLulusEl = document.getElementById("tidak_lulus");
+const rataRataEl = document.getElementById("rata_rata");
+const persentaseLulusEl = document.getElementById("persentase_lulus");
+const nilaiTertinggiEl = document.getElementById("nilai_tertinggi");
+const nilaiTerendahEl = document.getElementById("nilai_terendah");
+const rataKehadiranEl = document.getElementById("rata_kehadiran");
+
+const top10Table = document.getElementById("top10Table");
 
 
 /* =========================================================
@@ -950,66 +970,28 @@ let nilaiChart = null;
 
 const menuToggle = document.getElementById("menuToggle");
 const sidebar = document.getElementById("sidebar");
-const backdrop = document.getElementById("sidebarBackdrop");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 
 function closeSidebar() {
-    if (sidebar) sidebar.classList.remove("open");
-    if (backdrop) backdrop.classList.remove("show");
+    sidebar.classList.remove("open");
+    sidebarBackdrop.classList.remove("show");
 }
 
 if (menuToggle) {
     menuToggle.addEventListener("click", function () {
         sidebar.classList.toggle("open");
-        backdrop.classList.toggle("show");
+        sidebarBackdrop.classList.toggle("show");
     });
 }
 
-if (backdrop) {
-    backdrop.addEventListener("click", closeSidebar);
+if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener("click", closeSidebar);
 }
 
 
 /* =========================================================
-   HELPER
+   AVATAR SISWA
    ========================================================= */
-
-function formatNumber(value, decimal = 2) {
-    if (value === null || value === undefined || value === "") {
-        return "-";
-    }
-
-    const number = Number(value);
-
-    if (isNaN(number)) {
-        return "-";
-    }
-
-    return number.toFixed(decimal).replace(/\.00$/, "");
-}
-
-
-function getInitials(name) {
-
-    if (!name) {
-        return "?";
-    }
-
-    const parts = String(name)
-        .trim()
-        .split(/\s+/);
-
-    if (parts.length === 1) {
-        return parts[0]
-            .substring(0, 2)
-            .toUpperCase();
-    }
-
-    return (
-        parts[0][0] +
-        parts[parts.length - 1][0]
-    ).toUpperCase();
-}
-
 
 const avatarColors = [
     "#4361ee",
@@ -1021,7 +1003,6 @@ const avatarColors = [
     "#ec4899",
     "#14b8a6"
 ];
-
 
 function avatarColor(name) {
 
@@ -1039,24 +1020,48 @@ function avatarColor(name) {
 }
 
 
+function initials(name) {
+
+    if (!name) {
+        return "?";
+    }
+
+    const parts =
+        String(name)
+            .trim()
+            .split(/\s+/);
+
+    if (parts.length === 1) {
+        return parts[0]
+            .slice(0, 2)
+            .toUpperCase();
+    }
+
+    return (
+        parts[0][0] +
+        parts[parts.length - 1][0]
+    ).toUpperCase();
+}
+
+
 /* =========================================================
    STATUS BADGE
    ========================================================= */
 
 function statusBadge(status) {
 
-    const lulus =
+    const isLulus =
         String(status).toLowerCase() === "lulus";
 
     return `
         <span class="status-badge ${
-            lulus
+            isLulus
                 ? "status-lulus"
                 : "status-tidak"
         }">
 
             <i class="bi ${
-                lulus
+                isLulus
                     ? "bi-check-circle-fill"
                     : "bi-x-circle-fill"
             }"></i>
@@ -1078,11 +1083,9 @@ function rankBadge(index) {
     if (index === 0) {
         className = "rank-1";
     }
-
     else if (index === 1) {
         className = "rank-2";
     }
-
     else if (index === 2) {
         className = "rank-3";
     }
@@ -1096,30 +1099,84 @@ function rankBadge(index) {
 
 
 /* =========================================================
-   HAPUS CHART LAMA
+   FORMAT ANGKA
    ========================================================= */
 
-function destroyCharts() {
+function formatNumber(value, decimals = 2) {
 
-    if (kelulusanChart) {
-        kelulusanChart.destroy();
-        kelulusanChart = null;
+    if (
+        value === null ||
+        value === undefined ||
+        isNaN(value)
+    ) {
+        return "0";
     }
 
-    if (kehadiranChart) {
-        kehadiranChart.destroy();
-        kehadiranChart = null;
+    return Number(value).toFixed(decimals);
+}
+
+
+/* =========================================================
+   MEMBACA PARAMETER URL
+   ========================================================= */
+
+function getKelasFromURL() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    return params.get("kelas") || "";
+}
+
+
+/* =========================================================
+   UPDATE URL
+   ========================================================= */
+
+function updateURL(kelas) {
+
+    const url =
+        new URL(
+            window.location.href
+        );
+
+    if (kelas) {
+        url.searchParams.set(
+            "kelas",
+            kelas
+        );
+    }
+    else {
+        url.searchParams.delete(
+            "kelas"
+        );
     }
 
-    if (keterlambatanChart) {
-        keterlambatanChart.destroy();
-        keterlambatanChart = null;
+    window.history.replaceState(
+        {},
+        "",
+        url
+    );
+}
+
+
+/* =========================================================
+   MEMBUAT URL API
+   ========================================================= */
+
+function buildAPIUrl(kelas = "") {
+
+    if (!kelas) {
+        return API_URL;
     }
 
-    if (nilaiChart) {
-        nilaiChart.destroy();
-        nilaiChart = null;
-    }
+    return (
+        API_URL +
+        "?kelas=" +
+        encodeURIComponent(kelas)
+    );
 }
 
 
@@ -1129,17 +1186,11 @@ function destroyCharts() {
 
 async function loadDashboard(kelas = "") {
 
-    let url = API_DASHBOARD;
-
-    if (kelas && kelas !== "Semua Kelas") {
-
-        url +=
-            "?kelas=" +
-            encodeURIComponent(kelas);
-    }
+    const url =
+        buildAPIUrl(kelas);
 
     console.log(
-        "Mengambil data dashboard:",
+        "Mengambil API:",
         url
     );
 
@@ -1147,12 +1198,14 @@ async function loadDashboard(kelas = "") {
 
         showLoading();
 
-        const response = await fetch(url, {
-            method: "GET",
-            headers: {
-                "Accept": "application/json"
-            }
-        });
+        const response =
+            await fetch(url, {
+                method: "GET",
+                headers: {
+                    "Accept":
+                        "application/json"
+                }
+            });
 
         if (!response.ok) {
 
@@ -1165,17 +1218,13 @@ async function loadDashboard(kelas = "") {
             await response.json();
 
         console.log(
-            "Data Dashboard API:",
+            "Data API:",
             data
         );
 
-        updateDashboard(
-            data,
-            kelas
-        );
+        updateDashboard(data);
 
     }
-
     catch (error) {
 
         console.error(
@@ -1183,7 +1232,8 @@ async function loadDashboard(kelas = "") {
             error
         );
 
-        showApiError();
+        showError();
+
     }
 }
 
@@ -1194,47 +1244,45 @@ async function loadDashboard(kelas = "") {
 
 function showLoading() {
 
-    document.getElementById("total").textContent = "...";
-    document.getElementById("lulus").textContent = "...";
-    document.getElementById("tidak_lulus").textContent = "...";
-    document.getElementById("rata_rata").textContent = "...";
-    document.getElementById("persentase_lulus").textContent = "...";
-    document.getElementById("nilai_tertinggi").textContent = "...";
-    document.getElementById("nilai_terendah").textContent = "...";
-    document.getElementById("rata_kehadiran").textContent = "...";
+    totalEl.textContent = "...";
+    lulusEl.textContent = "...";
+    tidakLulusEl.textContent = "...";
+    rataRataEl.textContent = "...";
+    persentaseLulusEl.textContent = "...";
+    nilaiTertinggiEl.textContent = "...";
+    nilaiTerendahEl.textContent = "...";
+    rataKehadiranEl.textContent = "...";
 }
 
 
 /* =========================================================
-   API ERROR
+   ERROR
    ========================================================= */
 
-function showApiError() {
+function showError() {
 
-    document.getElementById("total").textContent = "-";
-    document.getElementById("lulus").textContent = "-";
-    document.getElementById("tidak_lulus").textContent = "-";
-    document.getElementById("rata_rata").textContent = "-";
+    totalEl.textContent = "-";
+    lulusEl.textContent = "-";
+    tidakLulusEl.textContent = "-";
+    rataRataEl.textContent = "-";
+    persentaseLulusEl.textContent = "-";
+    nilaiTertinggiEl.textContent = "-";
+    nilaiTerendahEl.textContent = "-";
+    rataKehadiranEl.textContent = "-";
 
-    document.getElementById(
-        "activeFilter"
-    ).innerHTML = `
-        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+    activeFilter.innerHTML = `
+        <i class="bi bi-exclamation-triangle me-1"></i>
         Gagal mengambil data API
     `;
 
-    document.getElementById(
-        "top10Table"
-    ).innerHTML = `
+    top10Table.innerHTML = `
         <tr>
             <td colspan="5"
                 class="text-center text-danger py-4">
 
-                <i class="bi bi-exclamation-circle fs-4"></i>
+                <i class="bi bi-exclamation-circle me-2"></i>
 
-                <div class="mt-2">
-                    Gagal mengambil data dari API.
-                </div>
+                Gagal mengambil data dari API.
 
             </td>
         </tr>
@@ -1246,120 +1294,123 @@ function showApiError() {
    UPDATE DASHBOARD
    ========================================================= */
 
-function updateDashboard(data, kelas) {
+function updateDashboard(data) {
 
     /* -----------------------------------------------------
-       CARD
+       STATISTIK
        ----------------------------------------------------- */
 
-    document.getElementById("total")
-        .textContent =
+    totalEl.textContent =
         data.total ?? 0;
 
-    document.getElementById("lulus")
-        .textContent =
+    lulusEl.textContent =
         data.lulus ?? 0;
 
-    document.getElementById("tidak_lulus")
-        .textContent =
+    tidakLulusEl.textContent =
         data.tidak_lulus ?? 0;
 
-    document.getElementById("rata_rata")
-        .textContent =
+    rataRataEl.textContent =
         formatNumber(
-            data.rata_rata
+            data.rata_rata ?? 0
         );
 
-    document.getElementById(
-        "persentase_lulus"
-    ).textContent =
+    persentaseLulusEl.textContent =
         formatNumber(
-            data.persentase_lulus
+            data.persentase_lulus ?? 0
         ) + "%";
 
 
     /* -----------------------------------------------------
        NILAI TERTINGGI & TERENDAH
+
+       API terbaru belum mengirim field:
+       nilai_tertinggi
+       nilai_terendah
+
+       Maka dihitung dari grafik_nilai.
        ----------------------------------------------------- */
 
-    const top10 =
-        data.top10 || [];
+    const grafikNilai =
+        data.grafik_nilai ?? [];
 
-    const nilaiArray =
-        top10
-            .map(siswa =>
-                Number(
-                    siswa.nilai_akhir
+    if (grafikNilai.length > 0) {
+
+        const nilaiArray =
+            grafikNilai
+                .map(item =>
+                    Number(
+                        item.nilai_akhir ?? 0
+                    )
                 )
-            )
-            .filter(nilai =>
-                !isNaN(nilai)
-            );
+                .filter(
+                    value =>
+                        !isNaN(value)
+                );
 
-    /*
-       API saat ini belum menyediakan
-       nilai_tertinggi / nilai_terendah.
+        if (nilaiArray.length > 0) {
 
-       Untuk sementara kita gunakan data
-       top10 sebagai sumber.
-    */
+            const nilaiTertinggi =
+                Math.max(...nilaiArray);
 
-    if (nilaiArray.length > 0) {
+            const nilaiTerendah =
+                Math.min(...nilaiArray);
 
-        const nilaiTertinggi =
-            Math.max(...nilaiArray);
+            nilaiTertinggiEl.textContent =
+                formatNumber(
+                    nilaiTertinggi
+                );
 
-        const nilaiTerendah =
-            Math.min(...nilaiArray);
+            nilaiTerendahEl.textContent =
+                formatNumber(
+                    nilaiTerendah
+                );
 
-        document.getElementById(
-            "nilai_tertinggi"
-        ).textContent =
-            formatNumber(
-                nilaiTertinggi
-            );
+        }
+        else {
 
-        document.getElementById(
-            "nilai_terendah"
-        ).textContent =
-            formatNumber(
-                nilaiTerendah
-            );
+            nilaiTertinggiEl.textContent =
+                "0";
 
-    } else {
+            nilaiTerendahEl.textContent =
+                "0";
+        }
 
-        document.getElementById(
-            "nilai_tertinggi"
-        ).textContent = "-";
+    }
+    else {
 
-        document.getElementById(
-            "nilai_terendah"
-        ).textContent = "-";
+        nilaiTertinggiEl.textContent =
+            "0";
+
+        nilaiTerendahEl.textContent =
+            "0";
     }
 
 
     /* -----------------------------------------------------
-       KEHADIRAN
+       RATA-RATA KEHADIRAN
        ----------------------------------------------------- */
+
+    const kehadiran =
+        data.kehadiran ?? {};
 
     const hadir =
         Number(
-            data.kehadiran?.hadir || 0
+            kehadiran.hadir ?? 0
         );
 
     const izin =
         Number(
-            data.kehadiran?.izin || 0
+            kehadiran.izin ?? 0
         );
 
     const sakit =
         Number(
-            data.kehadiran?.sakit || 0
+            kehadiran.sakit ?? 0
         );
 
     const alfa =
         Number(
-            data.kehadiran?.alfa || 0
+            kehadiran.alfa ?? 0
         );
 
     const totalKehadiran =
@@ -1368,64 +1419,89 @@ function updateDashboard(data, kelas) {
         sakit +
         alfa;
 
-    let persentaseHadir = 0;
+    let rataKehadiran = 0;
 
     if (totalKehadiran > 0) {
 
-        persentaseHadir =
+        rataKehadiran =
             (hadir /
                 totalKehadiran) *
             100;
     }
 
-    document.getElementById(
-        "rata_kehadiran"
-    ).textContent =
+    rataKehadiranEl.textContent =
         formatNumber(
-            persentaseHadir
+            rataKehadiran
         ) + "%";
 
 
     /* -----------------------------------------------------
-       FILTER
+       FILTER AKTIF
        ----------------------------------------------------- */
 
-    const namaKelas =
+    const kelasDipilih =
         data.kelas_dipilih ||
-        kelas ||
         "Semua Kelas";
 
-    document.getElementById(
-        "activeFilter"
-    ).innerHTML = `
+    activeFilter.innerHTML = `
         <i class="bi bi-view-list me-1"></i>
-        ${namaKelas}
+        ${kelasDipilih}
     `;
 
 
     /* -----------------------------------------------------
-       OPTION KELAS
+       DAFTAR KELAS
        ----------------------------------------------------- */
 
-    const select =
-        document.getElementById(
-            "filterKelas"
-        );
+    updateDaftarKelas(
+        data.daftar_kelas ?? []
+    );
 
-    const daftarKelas =
-        data.daftar_kelas || [];
+
+    /* -----------------------------------------------------
+       UPDATE CHART
+       ----------------------------------------------------- */
+
+    updateGrafikNilai(data);
+
+    updateGrafikKelulusan(data);
+
+    updateGrafikKehadiran(data);
+
+    updateGrafikKeterlambatan(data);
+
+
+    /* -----------------------------------------------------
+       UPDATE TOP 10
+       ----------------------------------------------------- */
+
+    updateTop10(
+        data.top10 ?? []
+    );
+}
+
+
+/* =========================================================
+   DAFTAR KELAS
+   ========================================================= */
+
+function updateDaftarKelas(
+    daftarKelas
+) {
+
+    const selectedValue =
+        filterKelas.value;
 
     /*
-       Hapus option kelas lama
-       kecuali "Semua Kelas".
-    */
+     * Bersihkan option lama
+     * kecuali "Semua Kelas"
+     */
 
-    while (
-        select.options.length > 1
-    ) {
-        select.remove(1);
-    }
-
+    filterKelas.innerHTML = `
+        <option value="">
+            Semua Kelas
+        </option>
+    `;
 
     daftarKelas.forEach(
         namaKelas => {
@@ -1441,323 +1517,385 @@ function updateDashboard(data, kelas) {
             option.textContent =
                 namaKelas;
 
-            select.appendChild(
+            filterKelas.appendChild(
                 option
             );
         }
     );
 
 
-    if (kelas) {
-        select.value = kelas;
-    } else {
-        select.value = "";
+    /*
+     * Pertahankan kelas yang sedang dipilih
+     */
+
+    if (
+        selectedValue &&
+        daftarKelas.includes(
+            selectedValue
+        )
+    ) {
+
+        filterKelas.value =
+            selectedValue;
+    }
+    else {
+
+        const kelasURL =
+            getKelasFromURL();
+
+        if (
+            kelasURL &&
+            daftarKelas.includes(
+                kelasURL
+            )
+        ) {
+
+            filterKelas.value =
+                kelasURL;
+        }
+        else {
+
+            filterKelas.value =
+                "";
+        }
+    }
+}
+
+
+/* =========================================================
+   CHART 1
+   GRAFIK NILAI
+   ========================================================= */
+
+function updateGrafikNilai(data) {
+
+    if (chartNilai) {
+        chartNilai.destroy();
     }
 
+    const grafikNilai =
+        data.grafik_nilai ?? [];
 
-    /* -----------------------------------------------------
-       CHART
-       ----------------------------------------------------- */
-
-    destroyCharts();
-
-    createKelulusanChart(data);
-
-    createKehadiranChart(data);
-
-    createKeterlambatanChart(data);
-
-    createTop10Chart(data);
-
-
-    /* -----------------------------------------------------
-       TABLE
-       ----------------------------------------------------- */
-
-    updateTop10Table(
-        data.top10 || []
-    );
-}
-
-
-/* =========================================================
-   CHART KELULUSAN
-   ========================================================= */
-
-function createKelulusanChart(data) {
-
-    const canvas =
-        document.getElementById(
-            "kelulusanChart"
+    const labels =
+        grafikNilai.map(
+            siswa =>
+                siswa.nama ?? "-"
         );
 
-    if (!canvas) return;
-
-    kelulusanChart =
-        new Chart(canvas, {
-
-            type: "doughnut",
-
-            data: {
-
-                labels: [
-                    "Lulus",
-                    "Tidak Lulus"
-                ],
-
-                datasets: [{
-
-                    data: [
-                        data.lulus || 0,
-                        data.tidak_lulus || 0
-                    ],
-
-                    backgroundColor: [
-                        "#10b981",
-                        "#ef4444"
-                    ],
-
-                    borderWidth: 3,
-
-                    borderColor: "#ffffff"
-                }]
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: true,
-
-                plugins: {
-
-                    legend: {
-                        position: "bottom"
-                    }
-                }
-            }
-        });
-}
-
-
-/* =========================================================
-   CHART KEHADIRAN
-   ========================================================= */
-
-function createKehadiranChart(data) {
-
-    const canvas =
-        document.getElementById(
-            "kehadiranChart"
+    const values =
+        grafikNilai.map(
+            siswa =>
+                Number(
+                    siswa.nilai_akhir ?? 0
+                )
         );
-
-    if (!canvas) return;
-
-    const kehadiran =
-        data.kehadiran || {};
-
-    kehadiranChart =
-        new Chart(canvas, {
-
-            type: "bar",
-
-            data: {
-
-                labels: [
-                    "Hadir",
-                    "Izin",
-                    "Sakit",
-                    "Alfa"
-                ],
-
-                datasets: [{
-
-                    label:
-                        "Jumlah Kehadiran",
-
-                    data: [
-
-                        kehadiran.hadir || 0,
-
-                        kehadiran.izin || 0,
-
-                        kehadiran.sakit || 0,
-
-                        kehadiran.alfa || 0
-                    ],
-
-                    backgroundColor: [
-                        "#10b981",
-                        "#f59e0b",
-                        "#0ea5e9",
-                        "#ef4444"
-                    ],
-
-                    borderRadius: 8
-                }]
-            },
-
-            options: {
-
-                responsive: true,
-
-                plugins: {
-
-                    legend: {
-                        display: false
-                    }
-                },
-
-                scales: {
-
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-}
-
-
-/* =========================================================
-   CHART KETERLAMBATAN
-   ========================================================= */
-
-function createKeterlambatanChart(data) {
-
-    const canvas =
-        document.getElementById(
-            "terlambatChart"
-        );
-
-    if (!canvas) return;
-
-    keterlambatanChart =
-        new Chart(canvas, {
-
-            type: "bar",
-
-            data: {
-
-                labels: [
-                    "Terlambat"
-                ],
-
-                datasets: [{
-
-                    label:
-                        "Jumlah Keterlambatan",
-
-                    data: [
-                        data.keterlambatan || 0
-                    ],
-
-                    backgroundColor:
-                        "#f59e0b",
-
-                    borderRadius: 8
-                }]
-            },
-
-            options: {
-
-                responsive: true,
-
-                plugins: {
-
-                    legend: {
-                        display: false
-                    }
-                },
-
-                scales: {
-
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-}
-
-
-/* =========================================================
-   CHART TOP 10
-   ========================================================= */
-
-function createTop10Chart(data) {
 
     const canvas =
         document.getElementById(
             "nilaiChart"
         );
 
-    if (!canvas) return;
+    if (!canvas) {
+        return;
+    }
 
-    const top10 =
-        data.top10 || [];
+    chartNilai =
+        new Chart(
+            canvas,
+            {
+                type: "bar",
 
-    const labels =
-        top10.map(
-            siswa =>
-                siswa.nama || "-"
-        );
+                data: {
 
-    const nilai =
-        top10.map(
-            siswa =>
-                Number(
-                    siswa.nilai_akhir || 0
-                )
-        );
+                    labels: labels,
 
-    nilaiChart =
-        new Chart(canvas, {
+                    datasets: [
+                        {
+                            label:
+                                "Nilai Akhir",
 
-            type: "bar",
+                            data:
+                                values,
 
-            data: {
+                            backgroundColor:
+                                "#4361ee",
 
-                labels: labels,
-
-                datasets: [{
-
-                    label:
-                        "Nilai Akhir",
-
-                    data: nilai,
-
-                    backgroundColor:
-                        "#4361ee",
-
-                    borderRadius: 8
-                }]
-            },
-
-            options: {
-
-                responsive: true,
-
-                indexAxis: "y",
-
-                plugins: {
-
-                    legend: {
-                        display: false
-                    }
+                            borderRadius:
+                                8
+                        }
+                    ]
                 },
 
-                scales: {
+                options: {
 
-                    x: {
+                    responsive: true,
 
-                        beginAtZero: true,
+                    maintainAspectRatio:
+                        false,
 
-                        max: 100
+                    indexAxis:
+                        "y",
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        }
+
+                    },
+
+                    scales: {
+
+                        x: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+
                     }
                 }
             }
-        });
+        );
+}
+
+
+/* =========================================================
+   CHART 2
+   GRAFIK KELULUSAN
+   ========================================================= */
+
+function updateGrafikKelulusan(data) {
+
+    if (chartKelulusan) {
+        chartKelulusan.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "kelulusanChart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    chartKelulusan =
+        new Chart(
+            canvas,
+            {
+                type: "doughnut",
+
+                data: {
+
+                    labels: [
+                        "Lulus",
+                        "Tidak Lulus"
+                    ],
+
+                    datasets: [
+                        {
+                            data: [
+                                data.lulus ?? 0,
+                                data.tidak_lulus ?? 0
+                            ],
+
+                            backgroundColor: [
+                                "#10b981",
+                                "#ef4444"
+                            ],
+
+                            borderWidth: 2,
+
+                            borderColor:
+                                "#ffffff"
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    cutout:
+                        "65%",
+
+                    plugins: {
+
+                        legend: {
+                            position:
+                                "bottom"
+                        }
+                    }
+                }
+            }
+        );
+}
+
+
+/* =========================================================
+   CHART 3
+   GRAFIK KEHADIRAN
+   ========================================================= */
+
+function updateGrafikKehadiran(data) {
+
+    if (chartKehadiran) {
+        chartKehadiran.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "kehadiranChart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    const kehadiran =
+        data.kehadiran ?? {};
+
+    chartKehadiran =
+        new Chart(
+            canvas,
+            {
+                type: "bar",
+
+                data: {
+
+                    labels: [
+                        "Hadir",
+                        "Izin",
+                        "Sakit",
+                        "Alfa"
+                    ],
+
+                    datasets: [
+                        {
+                            label:
+                                "Jumlah",
+
+                            data: [
+                                kehadiran.hadir ?? 0,
+                                kehadiran.izin ?? 0,
+                                kehadiran.sakit ?? 0,
+                                kehadiran.alfa ?? 0
+                            ],
+
+                            backgroundColor: [
+                                "#10b981",
+                                "#0ea5e9",
+                                "#f59e0b",
+                                "#ef4444"
+                            ],
+
+                            borderRadius:
+                                8
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        }
+                    },
+
+                    scales: {
+
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            }
+        );
+}
+
+
+/* =========================================================
+   CHART 4
+   GRAFIK KETERLAMBATAN
+   ========================================================= */
+
+function updateGrafikKeterlambatan(data) {
+
+    if (chartKeterlambatan) {
+        chartKeterlambatan.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "terlambatChart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    chartKeterlambatan =
+        new Chart(
+            canvas,
+            {
+                type: "bar",
+
+                data: {
+
+                    labels: [
+                        "Terlambat"
+                    ],
+
+                    datasets: [
+                        {
+                            label:
+                                "Jumlah Keterlambatan",
+
+                            data: [
+                                data.keterlambatan ?? 0
+                            ],
+
+                            backgroundColor:
+                                "#f59e0b",
+
+                            borderRadius:
+                                8
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        }
+                    },
+
+                    scales: {
+
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            }
+        );
 }
 
 
@@ -1765,24 +1903,20 @@ function createTop10Chart(data) {
    TOP 10 TABLE
    ========================================================= */
 
-function updateTop10Table(top10) {
+function updateTop10(top10) {
 
-    const table =
-        document.getElementById(
-            "top10Table"
-        );
-
-    table.innerHTML = "";
-
+    top10Table.innerHTML = "";
 
     if (!top10.length) {
 
-        table.innerHTML = `
+        top10Table.innerHTML = `
             <tr>
                 <td colspan="5"
                     class="text-center text-muted py-4">
 
-                    Belum ada data siswa.
+                    <i class="bi bi-info-circle me-2"></i>
+
+                    Belum ada data Top 10.
 
                 </td>
             </tr>
@@ -1796,21 +1930,21 @@ function updateTop10Table(top10) {
         (siswa, index) => {
 
             const nama =
-                siswa.nama || "-";
+                siswa.nama ?? "-";
 
             const nis =
-                siswa.nis || "-";
+                siswa.nis ?? "-";
 
             const kelas =
-                siswa.nama_kelas || "-";
+                siswa.nama_kelas ?? "-";
 
             const nilai =
                 Number(
-                    siswa.nilai_akhir || 0
+                    siswa.nilai_akhir ?? 0
                 );
 
             const status =
-                siswa.status_kelulusan ||
+                siswa.status_kelulusan ??
                 "-";
 
 
@@ -1822,43 +1956,41 @@ function updateTop10Table(top10) {
 
             row.innerHTML = `
 
+                <!-- PERINGKAT -->
                 <td>
                     ${rankBadge(index)}
                 </td>
 
+
+                <!-- SISWA -->
                 <td>
 
-                    <div class="d-flex
-                                align-items-center
-                                gap-2">
+                    <div class="d-flex align-items-center gap-2">
 
                         <span
                             class="student-avatar"
                             style="
                                 background:
                                 ${avatarColor(nama)};
-                            ">
-
-                            ${getInitials(nama)}
-
+                            "
+                        >
+                            ${initials(nama)}
                         </span>
+
 
                         <div>
 
-                            <strong>
+                            <strong
+                                class="d-block"
+                            >
                                 ${nama}
                             </strong>
 
-                            <div
+                            <small
                                 class="text-muted"
-                                style="
-                                    font-size:.72rem;
-                                ">
-
-                                NIS:
-                                ${nis}
-
-                            </div>
+                            >
+                                NIS: ${nis}
+                            </small>
 
                         </div>
 
@@ -1866,6 +1998,8 @@ function updateTop10Table(top10) {
 
                 </td>
 
+
+                <!-- KELAS -->
                 <td>
 
                     <span
@@ -1876,14 +2010,15 @@ function updateTop10Table(top10) {
                             border
                             px-3
                             py-2
-                        ">
-
+                        "
+                    >
                         ${kelas}
-
                     </span>
 
                 </td>
 
+
+                <!-- NILAI -->
                 <td>
 
                     <div
@@ -1891,10 +2026,12 @@ function updateTop10Table(top10) {
                             d-flex
                             align-items-center
                             gap-2
-                        ">
+                        "
+                    >
 
                         <div
-                            class="progress-nilai">
+                            class="progress-nilai"
+                        >
 
                             <div
                                 class="bar"
@@ -1904,10 +2041,12 @@ function updateTop10Table(top10) {
                                         nilai,
                                         100
                                     )}%;
-                                ">
+                                "
+                            >
                             </div>
 
                         </div>
+
 
                         <strong>
                             ${formatNumber(nilai)}
@@ -1917,14 +2056,17 @@ function updateTop10Table(top10) {
 
                 </td>
 
+
+                <!-- STATUS -->
                 <td>
-
                     ${statusBadge(status)}
-
                 </td>
+
             `;
 
-            table.appendChild(row);
+            top10Table.appendChild(
+                row
+            );
         }
     );
 }
@@ -1934,12 +2076,6 @@ function updateTop10Table(top10) {
    FILTER KELAS
    ========================================================= */
 
-const filterKelas =
-    document.getElementById(
-        "filterKelas"
-    );
-
-
 filterKelas.addEventListener(
     "change",
     function () {
@@ -1947,50 +2083,12 @@ filterKelas.addEventListener(
         const kelas =
             this.value;
 
-        /*
-           Update URL browser
-        */
-
-        const params =
-            new URLSearchParams(
-                window.location.search
-            );
-
-
-        if (!kelas) {
-
-            params.delete(
-                "kelas"
-            );
-
-        } else {
-
-            params.set(
-                "kelas",
-                kelas
-            );
-        }
-
-
-        const query =
-            params.toString();
-
-
-        history.replaceState(
-            null,
-            "",
-            window.location.pathname +
-            (
-                query
-                    ? "?" + query
-                    : ""
-            )
+        console.log(
+            "Filter kelas:",
+            kelas || "Semua Kelas"
         );
 
-
-        /*
-           Ambil data baru dari API
-        */
+        updateURL(kelas);
 
         loadDashboard(kelas);
     }
@@ -1998,7 +2096,7 @@ filterKelas.addEventListener(
 
 
 /* =========================================================
-   CARD TOTAL
+   CARD TOTAL SISWA
    ========================================================= */
 
 document
@@ -2097,39 +2195,17 @@ document
 
 
 /* =========================================================
-   AMBIL KELAS DARI URL
+   INITIAL LOAD
    ========================================================= */
 
-function getKelasFromURL() {
+const initialKelas =
+    getKelasFromURL();
 
-    const params =
-        new URLSearchParams(
-            window.location.search
-        );
-
-    return (
-        params.get("kelas") || ""
-    );
-}
-
-
-/* =========================================================
-   START DASHBOARD
-   ========================================================= */
-
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-
-        const kelas =
-            getKelasFromURL();
-
-        loadDashboard(kelas);
-    }
+loadDashboard(
+    initialKelas
 );
 
 </script>
-
 
 </body>
 </html>
