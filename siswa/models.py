@@ -8,7 +8,14 @@ class Kelas(models.Model):
     jurusan = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
-        return f"{self.nama} ({self.tingkat or '-'} - {self.jurusan or '-'})"
+        parts = []
+        if self.tingkat:
+            parts.append(self.tingkat)
+        if self.jurusan:
+            parts.append(self.jurusan)
+        if self.nama:
+            parts.append(self.nama)
+        return " ".join(parts) if parts else "-"
 
 
 class Siswa(models.Model):

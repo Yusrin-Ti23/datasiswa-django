@@ -13,6 +13,7 @@ from .views import (
     status_kelulusan,
     penyimpanan_file,
     hapus_file,
+    siswa_list_api,
 )
 
 
@@ -78,6 +79,16 @@ urlpatterns = [
         "dashboard-data/",
         dashboard_data_api,
         name="dashboard_data_api"
+    ),
+
+    # ------------------------------------------------------
+    # API SISWA LIST (untuk halaman detail)
+    # ------------------------------------------------------
+
+    path(
+        "siswa-list/",
+        siswa_list_api,
+        name="siswa_list_api"
     ),
 
     # ------------------------------------------------------

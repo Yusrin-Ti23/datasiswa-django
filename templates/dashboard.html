@@ -826,7 +826,7 @@
                         </div>
                     </div>
                     <div class="panel-body">
-                        <canvas id="nilaiKelasChart"></canvas>
+                        <canvas id="nilaiChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -839,6 +839,9 @@
                             <strong>Kehadiran per Kelas</strong>
                         </div>
                     </div>
+                    <div class="panel-body">
+                        <canvas id="kehadiranChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -849,6 +852,9 @@
                             <span class="title-icon" style="background:#f5f3ff;color:#8b5cf6;"><i class="bi bi-pie-chart-fill"></i></span>
                             <strong>Distribusi Nilai Akhir</strong>
                         </div>
+                    </div>
+                    <div class="panel-body">
+                        <canvas id="distribusiChart"></canvas>
                     </div>
                     
                 </div>
@@ -862,6 +868,9 @@
                             <strong>Keterlambatan Pengumpulan Tugas</strong>
                         </div>
                     </div>
+                    <div class="panel-body">
+                        <canvas id="terlambatChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -873,6 +882,9 @@
                             <strong>Persentase Kelulusan</strong>
                         </div>
                     </div>
+                    <div class="panel-body">
+                        <canvas id="persentaseChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -883,6 +895,9 @@
                             <span class="title-icon" style="background:#eef2ff;color:#4361ee;"><i class="bi bi-trophy-fill"></i></span>
                             <strong>Top 10 Nilai Siswa</strong>
                         </div>
+                    </div>
+                    <div class="panel-body">
+                        <canvas id="top10Chart"></canvas>
                     </div>
                 </div>
             </div>
@@ -943,6 +958,9 @@ let chartNilai = null;
 let chartKelulusan = null;
 let chartKehadiran = null;
 let chartKeterlambatan = null;
+let chartDistribusi = null;
+let chartPersentase = null;
+let chartTop10 = null;
 
 
 /* =========================================================
@@ -1322,68 +1340,17 @@ function updateDashboard(data) {
 
     /* -----------------------------------------------------
        NILAI TERTINGGI & TERENDAH
-
-       API terbaru belum mengirim field:
-       nilai_tertinggi
-       nilai_terendah
-
-       Maka dihitung dari grafik_nilai.
        ----------------------------------------------------- */
 
-    const grafikNilai =
-        data.grafik_nilai ?? [];
+    nilaiTertinggiEl.textContent =
+        formatNumber(
+            data.nilai_tertinggi ?? 0
+        );
 
-    if (grafikNilai.length > 0) {
-
-        const nilaiArray =
-            grafikNilai
-                .map(item =>
-                    Number(
-                        item.nilai_akhir ?? 0
-                    )
-                )
-                .filter(
-                    value =>
-                        !isNaN(value)
-                );
-
-        if (nilaiArray.length > 0) {
-
-            const nilaiTertinggi =
-                Math.max(...nilaiArray);
-
-            const nilaiTerendah =
-                Math.min(...nilaiArray);
-
-            nilaiTertinggiEl.textContent =
-                formatNumber(
-                    nilaiTertinggi
-                );
-
-            nilaiTerendahEl.textContent =
-                formatNumber(
-                    nilaiTerendah
-                );
-
-        }
-        else {
-
-            nilaiTertinggiEl.textContent =
-                "0";
-
-            nilaiTerendahEl.textContent =
-                "0";
-        }
-
-    }
-    else {
-
-        nilaiTertinggiEl.textContent =
-            "0";
-
-        nilaiTerendahEl.textContent =
-            "0";
-    }
+    nilaiTerendahEl.textContent =
+        formatNumber(
+            data.nilai_terendah ?? 0
+        );
 
 
     /* -----------------------------------------------------
@@ -1469,6 +1436,12 @@ function updateDashboard(data) {
     updateGrafikKehadiran(data);
 
     updateGrafikKeterlambatan(data);
+
+    updateGrafikDistribusiNilai(data);
+
+    updateGrafikPersentaseKelulusan(data);
+
+    updateGrafikTop10(data);
 
 
     /* -----------------------------------------------------
@@ -1573,20 +1546,20 @@ function updateGrafikNilai(data) {
         chartNilai.destroy();
     }
 
-    const grafikNilai =
-        data.grafik_nilai ?? [];
+    const nilaiPerKelas =
+        data.nilai_per_kelas ?? [];
 
     const labels =
-        grafikNilai.map(
-            siswa =>
-                siswa.nama ?? "-"
+        nilaiPerKelas.map(
+            item =>
+                item.Kelas ?? "-"
         );
 
     const values =
-        grafikNilai.map(
-            siswa =>
+        nilaiPerKelas.map(
+            item =>
                 Number(
-                    siswa.nilai_akhir ?? 0
+                    item.Rata_Rata ?? 0
                 )
         );
 
@@ -1612,7 +1585,7 @@ function updateGrafikNilai(data) {
                     datasets: [
                         {
                             label:
-                                "Nilai Akhir",
+                                "Rata-rata Nilai",
 
                             data:
                                 values,
@@ -1633,9 +1606,6 @@ function updateGrafikNilai(data) {
                     maintainAspectRatio:
                         false,
 
-                    indexAxis:
-                        "y",
-
                     plugins: {
 
                         legend: {
@@ -1646,7 +1616,7 @@ function updateGrafikNilai(data) {
 
                     scales: {
 
-                        x: {
+                        y: {
                             beginAtZero: true,
                             max: 100
                         }
@@ -1738,7 +1708,6 @@ function updateGrafikKelulusan(data) {
    CHART 3
    GRAFIK KEHADIRAN
    ========================================================= */
-
 function updateGrafikKehadiran(data) {
 
     if (chartKehadiran) {
@@ -1754,8 +1723,22 @@ function updateGrafikKehadiran(data) {
         return;
     }
 
-    const kehadiran =
-        data.kehadiran ?? {};
+    const kehadiranPerKelas =
+        data.kehadiran_per_kelas ?? [];
+
+    const labels =
+        kehadiranPerKelas.map(
+            item =>
+                item.Kelas ?? "-"
+        );
+
+    const values =
+        kehadiranPerKelas.map(
+            item =>
+                Number(
+                    item.Rata_Rata_Hadir ?? 0
+                )
+        );
 
     chartKehadiran =
         new Chart(
@@ -1765,31 +1748,18 @@ function updateGrafikKehadiran(data) {
 
                 data: {
 
-                    labels: [
-                        "Hadir",
-                        "Izin",
-                        "Sakit",
-                        "Alfa"
-                    ],
+                    labels: labels,
 
                     datasets: [
                         {
                             label:
-                                "Jumlah",
+                                "Persentase Hadir (%)",
 
-                            data: [
-                                kehadiran.hadir ?? 0,
-                                kehadiran.izin ?? 0,
-                                kehadiran.sakit ?? 0,
-                                kehadiran.alfa ?? 0
-                            ],
+                            data:
+                                values,
 
-                            backgroundColor: [
+                            backgroundColor:
                                 "#10b981",
-                                "#0ea5e9",
-                                "#f59e0b",
-                                "#ef4444"
-                            ],
 
                             borderRadius:
                                 8
@@ -1809,25 +1779,26 @@ function updateGrafikKehadiran(data) {
                         legend: {
                             display: false
                         }
+
                     },
 
                     scales: {
 
                         y: {
-                            beginAtZero: true
+                            beginAtZero: true,
+                            max: 100
                         }
+
                     }
                 }
             }
         );
 }
 
-
 /* =========================================================
    CHART 4
    GRAFIK KETERLAMBATAN
    ========================================================= */
-
 function updateGrafikKeterlambatan(data) {
 
     if (chartKeterlambatan) {
@@ -1843,6 +1814,23 @@ function updateGrafikKeterlambatan(data) {
         return;
     }
 
+    const keterlambatanPerKelas =
+        data.keterlambatan_per_kelas ?? [];
+
+    const labels =
+        keterlambatanPerKelas.map(
+            item =>
+                item.Kelas ?? "-"
+        );
+
+    const values =
+        keterlambatanPerKelas.map(
+            item =>
+                Number(
+                    item.Jumlah_Terlambat ?? 0
+                )
+        );
+
     chartKeterlambatan =
         new Chart(
             canvas,
@@ -1851,18 +1839,15 @@ function updateGrafikKeterlambatan(data) {
 
                 data: {
 
-                    labels: [
-                        "Terlambat"
-                    ],
+                    labels: labels,
 
                     datasets: [
                         {
                             label:
                                 "Jumlah Keterlambatan",
 
-                            data: [
-                                data.keterlambatan ?? 0
-                            ],
+                            data:
+                                values,
 
                             backgroundColor:
                                 "#f59e0b",
@@ -1885,6 +1870,7 @@ function updateGrafikKeterlambatan(data) {
                         legend: {
                             display: false
                         }
+
                     },
 
                     scales: {
@@ -1892,6 +1878,7 @@ function updateGrafikKeterlambatan(data) {
                         y: {
                             beginAtZero: true
                         }
+
                     }
                 }
             }
@@ -1900,8 +1887,270 @@ function updateGrafikKeterlambatan(data) {
 
 
 /* =========================================================
-   TOP 10 TABLE
-   ========================================================= */
+    CHART 5
+    DISTRIBUSI NILAI AKHIR
+    ========================================================= */
+
+function updateGrafikDistribusiNilai(data) {
+
+    if (chartDistribusi) {
+        chartDistribusi.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "distribusiChart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    const distribusi =
+        data.distribusi_nilai ?? [];
+
+    const labels =
+        distribusi.map(
+            item =>
+                item.label ?? "-"
+        );
+
+    const values =
+        distribusi.map(
+            item =>
+                Number(
+                    item.jumlah ?? 0
+                )
+        );
+
+    chartDistribusi =
+        new Chart(
+            canvas,
+            {
+                type: "pie",
+
+                data: {
+
+                    labels: labels,
+
+                    datasets: [
+                        {
+                            data:
+                                values,
+
+                            backgroundColor: [
+                                "#4361ee",
+                                "#10b981",
+                                "#f59e0b",
+                                "#0ea5e9",
+                                "#ef4444"
+                            ],
+
+                            borderWidth: 2,
+
+                            borderColor:
+                                "#ffffff"
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    plugins: {
+
+                        legend: {
+                            position:
+                                "bottom"
+                        }
+
+                    }
+                }
+            }
+        );
+}
+
+
+/* =========================================================
+    CHART 6
+    PERSENTASE KELULUSAN
+    ========================================================= */
+
+function updateGrafikPersentaseKelulusan(data) {
+
+    if (chartPersentase) {
+        chartPersentase.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "persentaseChart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    chartPersentase =
+        new Chart(
+            canvas,
+            {
+                type: "doughnut",
+
+                data: {
+
+                    labels: [
+                        "Lulus",
+                        "Tidak Lulus"
+                    ],
+
+                    datasets: [
+                        {
+                            data: [
+                                data.lulus ?? 0,
+                                data.tidak_lulus ?? 0
+                            ],
+
+                            backgroundColor: [
+                                "#10b981",
+                                "#ef4444"
+                            ],
+
+                            borderWidth: 2,
+
+                            borderColor:
+                                "#ffffff"
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    cutout:
+                        "65%",
+
+                    plugins: {
+
+                        legend: {
+                            position:
+                                "bottom"
+                        }
+
+                    }
+                }
+            }
+        );
+}
+
+
+/* =========================================================
+    CHART 7
+    TOP 10 NILAI SISWA
+    ========================================================= */
+
+function updateGrafikTop10(data) {
+
+    if (chartTop10) {
+        chartTop10.destroy();
+    }
+
+    const canvas =
+        document.getElementById(
+            "top10Chart"
+        );
+
+    if (!canvas) {
+        return;
+    }
+
+    const grafikNilai =
+        data.grafik_nilai ?? [];
+
+    const labels =
+        grafikNilai.map(
+            siswa =>
+                siswa.nama ?? "-"
+        );
+
+    const values =
+        grafikNilai.map(
+            siswa =>
+                Number(
+                    siswa.nilai_akhir ?? 0
+                )
+        );
+
+    chartTop10 =
+        new Chart(
+            canvas,
+            {
+                type: "bar",
+
+                data: {
+
+                    labels: labels,
+
+                    datasets: [
+                        {
+                            label:
+                                "Nilai Akhir",
+
+                            data:
+                                values,
+
+                            backgroundColor:
+                                "#6366f1",
+
+                            borderRadius:
+                                8
+                        }
+                    ]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    indexAxis:
+                        "y",
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        }
+
+                    },
+
+                    scales: {
+
+                        x: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+
+                    }
+                }
+            }
+        );
+}
+
+
+/* =========================================================
+    TOP 10 TABLE
+    ========================================================= */
 
 function updateTop10(top10) {
 

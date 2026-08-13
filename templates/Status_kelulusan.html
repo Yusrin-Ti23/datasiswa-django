@@ -191,8 +191,8 @@
         
     <!-- ================= TOPBAR ================= -->
     <div class="topbar">
-      <a href="{% url 'dashboard' %}" class="btn btn-secondary">
-    ← Kembali
+<a href="{% url 'dashboard' %}" class="btn btn-secondary" id="backBtn">
+← Kembali
 </a>
         <div class="page-title">
             <h5>Status Kelulusan</h5>
@@ -265,7 +265,7 @@
 
     <!-- ================= JAVASCRIPT ================= -->
     <script>
-        const API_URL = "/api/dashboard/api/";
+        const API_URL = "/api/siswa-list/";
 
         function getQueryParam(name) {
             const urlParams = new URLSearchParams(window.location.search);

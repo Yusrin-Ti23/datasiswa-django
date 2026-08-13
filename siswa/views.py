@@ -1,11 +1,10 @@
 from pathlib import Path
-
 import pandas as pd
-
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from rest_framework import filters, viewsets
@@ -15,6 +14,509 @@ from rest_framework.response import Response
 from .forms import UploadExcelForm
 from .models import ImportedFile, Kelas, Siswa
 from .serializers import KelasSerializer, SiswaSerializer
+from django.db.models import Avg, Count, Max, Min, Q, Sum
+
+
+
+def dashboard_data_api(request):
+    """
+    API Dashboard Data Siswa
+
+    GET:
+        /api/dashboard-data/
+        /api/dashboard-data/?kelas=XII%20IPA%20A
+    """
+
+    kelas = request.GET.get("kelas", "").strip()
+
+    # ==============================
+    # QUERY SISWA
+    # ==============================
+
+    siswa_qs = Siswa.objects.select_related("kelas").all()
+
+    # Filter kelas jika dipilih
+    if kelas and kelas != "Semua Kelas":
+        nama, tingkat, jurusan = _parse_kelas(kelas)
+        siswa_qs = siswa_qs.filter(
+            kelas__nama=nama,
+            kelas__tingkat=tingkat,
+            kelas__jurusan=jurusan,
+        )
+
+    # ==============================
+    # DATA DASAR
+    # ==============================
+
+    total = siswa_qs.count()
+
+    lulus = siswa_qs.filter(
+        status_kelulusan__iexact="Lulus"
+    ).count()
+
+    tidak_lulus = siswa_qs.filter(
+        status_kelulusan__iexact="Tidak Lulus"
+    ).count()
+
+    # ==============================
+    # NILAI
+    # ==============================
+
+    nilai_qs = siswa_qs.exclude(
+        nilai_akhir__isnull=True
+    )
+
+    rata_rata = nilai_qs.aggregate(
+        rata=Avg("nilai_akhir")
+    )["rata"]
+
+    nilai_tertinggi = nilai_qs.aggregate(
+        nilai=Max("nilai_akhir")
+    )["nilai"]
+
+    nilai_terendah = nilai_qs.aggregate(
+        nilai=Min("nilai_akhir")
+    )["nilai"]
+
+    # ==============================
+    # PERSENTASE KELULUSAN
+    # ==============================
+
+    if total > 0:
+        persentase_lulus = round(
+            (lulus / total) * 100,
+            2
+        )
+
+        persentase_tidak_lulus = round(
+            (tidak_lulus / total) * 100,
+            2
+        )
+    else:
+        persentase_lulus = 0
+        persentase_tidak_lulus = 0
+
+    # ==============================
+    # KEHADIRAN
+    # ==============================
+
+    kehadiran = siswa_qs.aggregate(
+        hadir=Avg("hadir"),
+        izin=Avg("izin"),
+        sakit=Avg("sakit"),
+        alfa=Avg("alfa"),
+    )
+
+    total_hadir = sum(
+        (siswa.hadir or 0)
+        for siswa in siswa_qs
+    )
+
+    total_izin = sum(
+        (siswa.izin or 0)
+        for siswa in siswa_qs
+    )
+
+    total_sakit = sum(
+        (siswa.sakit or 0)
+        for siswa in siswa_qs
+    )
+
+    total_alfa = sum(
+        (siswa.alfa or 0)
+        for siswa in siswa_qs
+    )
+
+    total_kehadiran = (
+        total_hadir +
+        total_izin +
+        total_sakit +
+        total_alfa
+    )
+
+    if total_kehadiran > 0:
+        rata_kehadiran = round(
+            (total_hadir / total_kehadiran) * 100,
+            2
+        )
+    else:
+        rata_kehadiran = 0
+
+    # ==============================
+    # KETERLAMBATAN
+    # ==============================
+
+    keterlambatan = sum(
+        (siswa.terlambat_tugas or 0)
+        for siswa in siswa_qs
+    )
+
+    # ==============================
+    # DAFTAR KELAS
+    # ==============================
+
+    daftar_kelas = list(
+        Kelas.objects.filter(
+            siswa__isnull=False
+        ).distinct().order_by("tingkat", "jurusan", "nama")
+    )
+
+    daftar_kelas = [
+        format_nama_kelas(k)
+        for k in daftar_kelas
+    ]
+
+    # ==============================
+    # TOP 10
+    # ==============================
+
+    top10_qs = siswa_qs.order_by(
+        "-nilai_akhir"
+    )[:10]
+
+    top10 = []
+
+    for siswa in top10_qs:
+        top10.append({
+            "nama": siswa.nama,
+            "nis": siswa.nis,
+            "nama_kelas": (
+                format_nama_kelas(siswa.kelas)
+                if siswa.kelas
+                else "-"
+            ),
+            "nilai_akhir": round(
+                siswa.nilai_akhir or 0,
+                2
+            ),
+            "status_kelulusan": (
+                siswa.status_kelulusan
+                or "-"
+            ),
+        })
+
+    # ==============================
+    # GRAFIK NILAI
+    # ==============================
+
+    grafik_nilai = [
+        {
+            "nama": item["nama"],
+            "nilai_akhir": item["nilai_akhir"],
+        }
+        for item in top10
+    ]
+
+    # ==============================
+    # NILAI PER KELAS
+    # ==============================
+
+    nilai_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        data_kelas = (
+            Siswa.objects
+            .filter(
+                kelas__nama=nama,
+                kelas__tingkat=tingkat,
+                kelas__jurusan=jurusan,
+            )
+            .filter(
+                nilai_akhir__isnull=False
+            )
+        )
+
+        rata = (
+            data_kelas.aggregate(
+                rata=Avg("nilai_akhir")
+            )["rata"] or 0
+        )
+
+        nilai_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Rata_Rata": round(
+                float(rata),
+                2
+            )
+
+        })
+
+    # ==============================
+    # KEHADIRAN PER KELAS
+    # ==============================
+
+    kehadiran_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        data_kelas = Siswa.objects.filter(
+            kelas__nama=nama,
+            kelas__tingkat=tingkat,
+            kelas__jurusan=jurusan,
+        )
+
+        hadir_kelas = (
+            data_kelas.aggregate(
+                total=Sum("hadir")
+            )["total"] or 0
+        )
+
+        izin_kelas = (
+            data_kelas.aggregate(
+                total=Sum("izin")
+            )["total"] or 0
+        )
+
+        sakit_kelas = (
+            data_kelas.aggregate(
+                total=Sum("sakit")
+            )["total"] or 0
+        )
+
+        alfa_kelas = (
+            data_kelas.aggregate(
+                total=Sum("alfa")
+            )["total"] or 0
+        )
+
+        total_kelas = (
+            hadir_kelas +
+            izin_kelas +
+            sakit_kelas +
+            alfa_kelas
+        )
+
+        if total_kelas > 0:
+
+            persentase_hadir = round(
+                (
+                    hadir_kelas /
+                    total_kelas
+                ) * 100,
+                2
+            )
+
+        else:
+
+            persentase_hadir = 0
+
+
+        kehadiran_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Rata_Rata_Hadir":
+                persentase_hadir
+
+        })
+
+    # ==============================
+    # DISTRIBUSI NILAI
+    # ==============================
+
+    distribusi_nilai = [
+
+        {
+            "label": "90 - 100",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=90,
+                nilai_akhir__lte=100
+            ).count()
+        },
+
+        {
+            "label": "80 - 89",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=80,
+                nilai_akhir__lt=90
+            ).count()
+        },
+
+        {
+            "label": "70 - 79",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=70,
+                nilai_akhir__lt=80
+            ).count()
+        },
+
+        {
+            "label": "60 - 69",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=60,
+                nilai_akhir__lt=70
+            ).count()
+        },
+
+        {
+            "label": "< 60",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__lt=60
+            ).count()
+        },
+
+    ]
+
+    # ==============================
+    # KETERLAMBATAN PER KELAS
+    # ==============================
+
+    keterlambatan_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        jumlah = (
+            Siswa.objects
+            .filter(
+                kelas__nama=nama,
+                kelas__tingkat=tingkat,
+                kelas__jurusan=jurusan,
+            )
+            .aggregate(
+                total=Sum("terlambat_tugas")
+            )["total"] or 0
+        )
+
+        keterlambatan_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Jumlah_Terlambat":
+                jumlah
+
+        })
+
+    # ==============================
+    # RESPONSE
+    # ==============================
+
+    data = {
+        "kelas_dipilih": kelas if kelas else "Semua Kelas",
+
+        "total": total,
+        "lulus": lulus,
+        "tidak_lulus": tidak_lulus,
+
+        "persentase_lulus": persentase_lulus,
+        "persentase_tidak_lulus": persentase_tidak_lulus,
+
+        "rata_rata": round(
+            rata_rata or 0,
+            2
+        ),
+
+        "nilai_tertinggi": round(
+            nilai_tertinggi or 0,
+            2
+        ),
+
+        "nilai_terendah": round(
+            nilai_terendah or 0,
+            2
+        ),
+
+        "rata_kehadiran": rata_kehadiran,
+
+        "daftar_kelas": daftar_kelas,
+
+        "top10": top10,
+
+        "grafik_nilai": grafik_nilai,
+
+        "kehadiran": {
+            "hadir": total_hadir,
+            "izin": total_izin,
+            "sakit": total_sakit,
+            "alfa": total_alfa,
+        },
+
+        "keterlambatan": keterlambatan,
+
+        "nilai_per_kelas": nilai_per_kelas,
+
+        "kehadiran_per_kelas": kehadiran_per_kelas,
+
+        "distribusi_nilai": distribusi_nilai,
+
+        "keterlambatan_per_kelas": keterlambatan_per_kelas,
+    }
+
+    return JsonResponse(data)
+
+
+
+def siswa_list_api(request):
+
+    kelas = request.GET.get("kelas", "").strip()
+    status = request.GET.get("status", "").strip()
+
+    siswa_qs = Siswa.objects.select_related("kelas").all()
+
+    if kelas and kelas != "Semua":
+        nama, tingkat, jurusan = _parse_kelas(kelas)
+        siswa_qs = siswa_qs.filter(
+            kelas__nama=nama,
+            kelas__tingkat=tingkat,
+            kelas__jurusan=jurusan,
+        )
+
+    if status and status != "Semua":
+        siswa_qs = siswa_qs.filter(status_kelulusan__iexact=status)
+
+    siswa_qs = siswa_qs.order_by("nama")
+
+    siswa_detail = []
+
+    for siswa in siswa_qs:
+
+        siswa_detail.append({
+
+            "NIS": siswa.nis,
+
+            "Nama_Siswa": siswa.nama,
+
+            "Kelas": (
+                format_nama_kelas(siswa.kelas)
+                if siswa.kelas
+                else "-"
+            ),
+
+            "Jenis_Kelamin": siswa.jenis_kelamin,
+
+            "Nilai_Akhir": (
+                round(
+                    float(siswa.nilai_akhir or 0),
+                    2
+                )
+            ),
+
+            "Status_Kelulusan": (
+                siswa.status_kelulusan
+                or "-"
+            ),
+
+        })
+
+    return JsonResponse({
+
+        "siswa_detail":
+            siswa_detail,
+
+    })
 
 
 # ==========================================================
@@ -690,300 +1192,501 @@ def hapus_file(request, pk):
 # ==========================================================
 
 @api_view(["GET"])
-def dashboard_data_api(request):
+def dashboard_data(request):
 
-    nama_kelas = request.GET.get(
-        "kelas"
-    )
-
-    # ------------------------------------------------------
-    # AMBIL DATA DATABASE
-    # ------------------------------------------------------
-
-    siswa = Siswa.objects.select_related(
-        "kelas"
-    ).all()
-
-    data = list(
-        siswa.values(
-
-            "id",
-
-            "nama",
-
-            "nis",
-
-            "jenis_kelamin",
-
-            "hadir",
-
-            "izin",
-
-            "sakit",
-
-            "alfa",
-
-            "tugas",
-
-            "terlambat_tugas",
-
-            "uts",
-
-            "uas",
-
-            "nilai_akhir",
-
-            "status_kelulusan",
-
-            "kelas_id",
-
-            "kelas__nama",
-
-            "kelas__tingkat",
-
-            "kelas__jurusan",
-        )
-    )
-
-    df = pd.DataFrame(data)
-
-    # ------------------------------------------------------
-    # JIKA DATA KOSONG
-    # ------------------------------------------------------
-
-    if df.empty:
-
-        return Response(
-            {
-                "error": "Data siswa belum tersedia."
-            },
-            status=404
-        )
-
-    # ------------------------------------------------------
-    # FORMAT NAMA KELAS
-    # ------------------------------------------------------
-
-    df["nama_kelas"] = (
-        df["kelas__tingkat"]
-        .fillna("")
-        .astype(str)
-
-        + " "
-
-        + df["kelas__jurusan"]
-        .fillna("")
-        .astype(str)
-
-        + " "
-
-        + df["kelas__nama"]
-        .fillna("")
-        .astype(str)
-    )
-
-    df["nama_kelas"] = (
-        df["nama_kelas"]
-        .str.replace(
-            r"\s+",
-            " ",
-            regex=True
-        )
-        .str.strip()
-    )
-
-    # ------------------------------------------------------
-    # DAFTAR KELAS
-    # ------------------------------------------------------
-
-    daftar_kelas = sorted(
-        df["nama_kelas"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-
-    # ------------------------------------------------------
+    # =====================================================
     # FILTER KELAS
-    # ------------------------------------------------------
+    # =====================================================
 
-    if nama_kelas and nama_kelas != "Semua":
+    kelas = request.GET.get("kelas", "").strip()
 
-        df = df[
-            df["nama_kelas"] == nama_kelas
-        ].copy()
-
-        if df.empty:
-
-            return Response(
-                {
-                    "error": (
-                        f"Kelas '{nama_kelas}' "
-                        "tidak ditemukan."
-                    ),
-
-                    "daftar_kelas": daftar_kelas,
-                },
-                status=404
-            )
-
+    if kelas and kelas != "Semua Kelas":
+        nama, tingkat, jurusan = _parse_kelas(kelas)
+        siswa_qs = siswa_qs.filter(
+            kelas__nama=nama,
+            kelas__tingkat=tingkat,
+            kelas__jurusan=jurusan,
+        )
+        kelas_dipilih = kelas
     else:
+        siswa_qs = Siswa.objects.all()
+        kelas_dipilih = "Semua Kelas"
 
-        nama_kelas = "Semua Kelas"
 
-    # ------------------------------------------------------
-    # STATISTIK UTAMA
-    # ------------------------------------------------------
+    # =====================================================
+    # STATISTIK SISWA
+    # =====================================================
 
-    total = len(df)
+    total = siswa_qs.count()
 
-    lulus = int(
-        df["status_kelulusan"]
-        .eq("Lulus")
-        .sum()
-    )
+    lulus = siswa_qs.filter(
+        status_kelulusan="Lulus"
+    ).count()
 
-    tidak_lulus = int(
-        df["status_kelulusan"]
-        .eq("Tidak Lulus")
-        .sum()
+    tidak_lulus = siswa_qs.filter(
+        status_kelulusan="Tidak Lulus"
+    ).count()
+
+
+    # =====================================================
+    # NILAI
+    # =====================================================
+
+    nilai_qs = siswa_qs.filter(
+        nilai_akhir__isnull=False
     )
 
     rata_rata = (
-        df["nilai_akhir"]
-        .mean()
-        if total
-        else 0
+        nilai_qs.aggregate(
+            rata=Avg("nilai_akhir")
+        )["rata"] or 0
     )
 
-    # ------------------------------------------------------
-    # PERSENTASE
-    # ------------------------------------------------------
-
-    persentase_lulus = (
-        lulus / total * 100
-        if total
-        else 0
+    nilai_tertinggi = (
+        nilai_qs.order_by("-nilai_akhir")
+        .values_list("nilai_akhir", flat=True)
+        .first()
+        or 0
     )
 
-    persentase_tidak_lulus = (
-        tidak_lulus / total * 100
-        if total
-        else 0
+    nilai_terendah = (
+        nilai_qs.order_by("nilai_akhir")
+        .values_list("nilai_akhir", flat=True)
+        .first()
+        or 0
     )
 
-    # ------------------------------------------------------
-    # TOP 10 SISWA
-    # ------------------------------------------------------
 
-    top10 = (
-        df.sort_values(
-            by="nilai_akhir",
-            ascending=False
+    # =====================================================
+    # PERSENTASE KELULUSAN
+    # =====================================================
+
+    if total > 0:
+
+        persentase_lulus = round(
+            (lulus / total) * 100,
+            2
         )
-        .head(10)
-        [
-            [
-                "nama",
-                "nis",
-                "nama_kelas",
-                "nilai_akhir",
-                "status_kelulusan",
-            ]
-        ]
-        .to_dict("records")
-    )
 
-    # ------------------------------------------------------
-    # GRAFIK NILAI
-    # ------------------------------------------------------
-
-    grafik_nilai = (
-        df.sort_values(
-            by="nilai_akhir",
-            ascending=False
+        persentase_tidak_lulus = round(
+            (tidak_lulus / total) * 100,
+            2
         )
-        [
-            [
-                "nama",
-                "nilai_akhir",
-            ]
-        ]
-        .head(10)
-        .to_dict("records")
-    )
 
-    # ------------------------------------------------------
+    else:
+
+        persentase_lulus = 0
+        persentase_tidak_lulus = 0
+
+
+    # =====================================================
     # KEHADIRAN
-    # ------------------------------------------------------
+    # =====================================================
 
-    kehadiran = {
+    hadir = siswa_qs.aggregate(
+        total=Sum("hadir")
+    )["total"] or 0
 
-        "hadir": int(
-            df["hadir"].sum()
-        ),
+    izin = siswa_qs.aggregate(
+        total=Sum("izin")
+    )["total"] or 0
 
-        "izin": int(
-            df["izin"].sum()
-        ),
+    sakit = siswa_qs.aggregate(
+        total=Sum("sakit")
+    )["total"] or 0
 
-        "sakit": int(
-            df["sakit"].sum()
-        ),
+    alfa = siswa_qs.aggregate(
+        total=Sum("alfa")
+    )["total"] or 0
 
-        "alfa": int(
-            df["alfa"].sum()
-        ),
-    }
 
-    # ------------------------------------------------------
-    # KETERLAMBATAN
-    # ------------------------------------------------------
-
-    keterlambatan = int(
-        df["terlambat_tugas"].sum()
+    total_kehadiran = (
+        hadir +
+        izin +
+        sakit +
+        alfa
     )
 
-    # ------------------------------------------------------
+    if total_kehadiran > 0:
+
+        rata_kehadiran = round(
+            (hadir / total_kehadiran) * 100,
+            2
+        )
+
+    else:
+
+        rata_kehadiran = 0
+
+
+    # =====================================================
+    # KETERLAMBATAN TUGAS
+    # =====================================================
+
+    keterlambatan = siswa_qs.aggregate(
+        total=Sum("terlambat_tugas")
+    )["total"] or 0
+
+
+    # =====================================================
+    # DAFTAR KELAS
+    # =====================================================
+
+    daftar_kelas = list(
+        Kelas.objects.filter(
+            siswa__isnull=False
+        ).distinct().order_by("tingkat", "jurusan", "nama")
+    )
+
+    daftar_kelas = [
+        format_nama_kelas(k)
+        for k in daftar_kelas
+    ]
+
+
+    # =====================================================
+    # TOP 10
+    # =====================================================
+
+    top10_qs = (
+        siswa_qs
+        .filter(
+            nilai_akhir__isnull=False
+        )
+        .order_by(
+            "-nilai_akhir"
+        )[:10]
+    )
+
+
+    top10 = []
+
+    for siswa in top10_qs:
+
+        top10.append({
+
+            "nama": siswa.nama,
+
+            "nis": siswa.nis,
+
+            "nama_kelas": (
+                format_nama_kelas(siswa.kelas)
+                if siswa.kelas
+                else "-"
+            ),
+
+            "nilai_akhir": round(
+                float(siswa.nilai_akhir or 0),
+                2
+            ),
+
+            "status_kelulusan": (
+                siswa.status_kelulusan
+                or "-"
+            ),
+
+        })
+
+
+    # =====================================================
+    # GRAFIK NILAI
+    # =====================================================
+
+    grafik_nilai = [
+
+        {
+            "nama": siswa["nama"],
+            "nilai_akhir": siswa["nilai_akhir"]
+        }
+
+        for siswa in top10
+
+    ]
+
+
+    # =====================================================
+    # NILAI PER KELAS
+    # =====================================================
+
+    nilai_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        data_kelas = (
+            Siswa.objects
+            .filter(
+                kelas__nama=nama,
+                kelas__tingkat=tingkat,
+                kelas__jurusan=jurusan,
+            )
+            .filter(
+                nilai_akhir__isnull=False
+            )
+        )
+
+        rata = (
+            data_kelas.aggregate(
+                rata=Avg("nilai_akhir")
+            )["rata"] or 0
+        )
+
+        nilai_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Rata_Rata": round(
+                float(rata),
+                2
+            )
+
+        })
+
+
+    # =====================================================
+    # KEHADIRAN PER KELAS
+    # =====================================================
+
+    kehadiran_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        data_kelas = Siswa.objects.filter(
+            kelas__nama=nama,
+            kelas__tingkat=tingkat,
+            kelas__jurusan=jurusan,
+        )
+
+        hadir_kelas = (
+            data_kelas.aggregate(
+                total=Sum("hadir")
+            )["total"] or 0
+        )
+
+        izin_kelas = (
+            data_kelas.aggregate(
+                total=Sum("izin")
+            )["total"] or 0
+        )
+
+        sakit_kelas = (
+            data_kelas.aggregate(
+                total=Sum("sakit")
+            )["total"] or 0
+        )
+
+        alfa_kelas = (
+            data_kelas.aggregate(
+                total=Sum("alfa")
+            )["total"] or 0
+        )
+
+        total_kelas = (
+            hadir_kelas +
+            izin_kelas +
+            sakit_kelas +
+            alfa_kelas
+        )
+
+        if total_kelas > 0:
+
+            persentase_hadir = round(
+                (
+                    hadir_kelas /
+                    total_kelas
+                ) * 100,
+                2
+            )
+
+        else:
+
+            persentase_hadir = 0
+
+
+        kehadiran_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Rata_Rata_Hadir":
+                persentase_hadir
+
+        })
+
+
+    # =====================================================
+    # DISTRIBUSI NILAI
+    # =====================================================
+
+    distribusi_nilai = [
+
+        {
+            "label": "90 - 100",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=90,
+                nilai_akhir__lte=100
+            ).count()
+        },
+
+        {
+            "label": "80 - 89",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=80,
+                nilai_akhir__lt=90
+            ).count()
+        },
+
+        {
+            "label": "70 - 79",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=70,
+                nilai_akhir__lt=80
+            ).count()
+        },
+
+        {
+            "label": "60 - 69",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__gte=60,
+                nilai_akhir__lt=70
+            ).count()
+        },
+
+        {
+            "label": "< 60",
+
+            "jumlah": siswa_qs.filter(
+                nilai_akhir__lt=60
+            ).count()
+        },
+
+    ]
+
+
+    # =====================================================
+    # KETERLAMBATAN PER KELAS
+    # =====================================================
+
+    keterlambatan_per_kelas = []
+
+    for nama_kelas in daftar_kelas:
+
+        nama, tingkat, jurusan = _parse_kelas(nama_kelas)
+
+        jumlah = (
+            Siswa.objects
+            .filter(
+                kelas__nama=nama,
+                kelas__tingkat=tingkat,
+                kelas__jurusan=jurusan,
+            )
+            .aggregate(
+                total=Sum("terlambat_tugas")
+            )["total"] or 0
+        )
+
+        keterlambatan_per_kelas.append({
+
+            "Kelas": nama_kelas,
+
+            "Jumlah_Terlambat":
+                jumlah
+
+        })
+
+
+    # =====================================================
     # RESPONSE
-    # ------------------------------------------------------
+    # =====================================================
 
     return Response({
 
-        "kelas_dipilih": nama_kelas,
+        "kelas_dipilih":
+            kelas_dipilih,
 
-        "total": total,
+        "total":
+            total,
 
-        "lulus": lulus,
+        "lulus":
+            lulus,
 
-        "tidak_lulus": tidak_lulus,
+        "tidak_lulus":
+            tidak_lulus,
 
-        "persentase_lulus": round(
+        "persentase_lulus":
             persentase_lulus,
-            2
-        ),
 
-        "persentase_tidak_lulus": round(
+        "persentase_tidak_lulus":
             persentase_tidak_lulus,
-            2
-        ),
 
-        "rata_rata": round(
-            rata_rata,
-            2
-        ),
+        "rata_rata":
+            round(
+                float(rata_rata),
+                2
+            ),
 
-        "daftar_kelas": daftar_kelas,
+        "nilai_tertinggi":
+            round(
+                float(nilai_tertinggi),
+                2
+            ),
 
-        "top10": top10,
+        "nilai_terendah":
+            round(
+                float(nilai_terendah),
+                2
+            ),
 
-        "grafik_nilai": grafik_nilai,
+        "rata_kehadiran":
+            rata_kehadiran,
 
-        "kehadiran": kehadiran,
+        "kehadiran": {
 
-        "keterlambatan": keterlambatan,
+            "hadir":
+                hadir,
+
+            "izin":
+                izin,
+
+            "sakit":
+                sakit,
+
+            "alfa":
+                alfa,
+
+        },
+
+        "keterlambatan":
+            keterlambatan,
+
+        "daftar_kelas":
+            daftar_kelas,
+
+        "top10":
+            top10,
+
+        "grafik_nilai":
+            grafik_nilai,
+
+        "nilai_per_kelas":
+            nilai_per_kelas,
+
+        "kehadiran_per_kelas":
+            kehadiran_per_kelas,
+
+        "distribusi_nilai":
+            distribusi_nilai,
+
+        "keterlambatan_per_kelas":
+            keterlambatan_per_kelas,
+
     })
-
 
 # ==========================================================
 # API ANALISIS KELAS
